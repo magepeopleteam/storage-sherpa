@@ -1,0 +1,120 @@
+<?php
+/**
+ * Shared data-access layer for {prefix}ss_media_findings, backing Modules
+ * 2 (Orphan Media), 3 (Duplicate Media), 4 (Large Files), and 7 (Broken
+ * Media). One table, one CRUD surface, disambiguated by finding_type — so
+ * the four scanners share storage/query/bulk-action code instead of each
+ * growing its own near-identical table.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+class SS_Media_Findings {
+
+	const TYPE_ORPHAN    = 'orphan';
+	const TYPE_DUPLICATE = 'duplicate';
+	const TYPE_LARGE     = 'large';
+	const TYPE_BROKEN    = 'broken';
+
+	/**
+	 * Replaces all stored findings of a given type with a fresh scan result.
+	 * Each $row: attachment_id, file_path, status, reason, file_size, group_hash (optional).
+	 */
+	public static function replace_all( $finding_type, array $rows ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'ss_media_findings';
+
+		$wpdb->delete( $table, array( 'finding_type' => $finding_type ), array( '%s' ) );
+
+		$now = current_time( 'mysql' );
+
+		foreach ( $rows as $row ) {
+			$wpdb->insert(
+				$table,
+				array(
+					'finding_type'  => $finding_type,
+					'attachment_id' => isset( $row['attachment_id'] ) ? (int) $row['attachment_id'] : 0,
+					'file_path'     => isset( $row['file_path'] ) ? $row['file_path'] : null,
+					'status'        => isset( $row['status'] ) ? $row['status'] : 'unused',
+					'reason'        => isset( $row['reason'] ) ? $row['reason'] : null,
+					'file_size'     => isset( $row['file_size'] ) ? (int) $row['file_size'] : 0,
+					'group_hash'    => isset( $row['group_hash'] ) ? $row['group_hash'] : null,
+					'checked_at'    => $now,
+				),
+				array( '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%s' )
+			);
+		}
+
+		return count( $rows );
+	}
+
+	public static function query( $finding_type, $args = array() ) {
+		global $wpdb;
+
+		$defaults = array(
+			'status'  => '',
+			'orderby' => 'file_size DESC',
+			'limit'   => 200,
+			'offset'  => 0,
+		);
+		$args = wp_parse_args( $args, $defaults );
+
+		$where  = array( 'finding_type = %s' );
+		$params = array( $finding_type );
+
+		if ( $args['status'] ) {
+			$where[]  = 'status = %s';
+			$params[] = $args['status'];
+		}
+
+		$sql = "SELECT * FROM {$wpdb->prefix}ss_media_findings WHERE " . implode( ' AND ', $where )
+			. ' ORDER BY ' . esc_sql( $args['orderby'] )
+			. ' LIMIT %d OFFSET %d';
+
+		$params[] = (int) $args['limit'];
+		$params[] = (int) $args['offset'];
+
+		return $wpdb->get_results( $wpdb->prepare( $sql, $params ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	}
+
+	public static function get( $id ) {
+		global $wpdb;
+		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}ss_media_findings WHERE id = %d", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	public static function delete( $id ) {
+		global $wpdb;
+		return (bool) $wpdb->delete( $wpdb->prefix . 'ss_media_findings', array( 'id' => (int) $id ), array( '%d' ) );
+	}
+
+	public static function counts( $finding_type ) {
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT status, COUNT(*) AS total, SUM(file_size) AS bytes
+				 FROM {$wpdb->prefix}ss_media_findings
+				 WHERE finding_type = %s
+				 GROUP BY status",
+				$finding_type
+			)
+		); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		$out = array();
+		foreach ( (array) $rows as $row ) {
+			$out[ $row->status ] = array(
+				'count' => (int) $row->total,
+				'bytes' => (int) $row->bytes,
+			);
+		}
+
+		return $out;
+	}
+
+	public static function last_checked( $finding_type ) {
+		global $wpdb;
+		return $wpdb->get_var( $wpdb->prepare( "SELECT MAX(checked_at) FROM {$wpdb->prefix}ss_media_findings WHERE finding_type = %s", $finding_type ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+}

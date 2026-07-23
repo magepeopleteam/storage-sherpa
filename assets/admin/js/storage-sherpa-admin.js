@@ -1,0 +1,166 @@
+/**
+ * Shared admin JS for every server-rendered Storage Sherpa screen.
+ *
+ * Two small, generic mechanisms cover every screen's needs:
+ *  - [data-ss-action]: a button that POSTs/DELETEs to a REST path, optionally
+ *    confirms first, then reloads the page (or a subset via data-ss-reload).
+ *  - [data-ss-scan]: starts a Module 24 background-scan job and polls
+ *    /scan/step until status is "complete", updating a progress element.
+ *  - "select all" checkboxes for the WP_List_Table-style bulk-action forms.
+ *
+ * No build step: this is plain ES2017, loaded with wp-api-fetch as a
+ * dependency so `wp.apiFetch` is already configured (nonce + REST root) by
+ * the inline script SS_Admin::enqueue_assets() adds.
+ */
+( function () {
+	'use strict';
+
+	function apiFetch( path, options ) {
+		return wp.apiFetch( Object.assign( { path: path }, options || {} ) );
+	}
+
+	function formatBytes( bytes ) {
+		var units = [ 'B', 'KB', 'MB', 'GB', 'TB' ];
+		var value = Math.max( 0, bytes || 0 );
+		var power = value > 0 ? Math.floor( Math.log( value ) / Math.log( 1024 ) ) : 0;
+		power = Math.min( power, units.length - 1 );
+		return ( value / Math.pow( 1024, power ) ).toFixed( 2 ) + ' ' + units[ power ];
+	}
+
+	window.StorageSherpaApi = { fetch: apiFetch, formatBytes: formatBytes };
+
+	function setStatus( el, text ) {
+		if ( el ) {
+			el.textContent = text;
+		}
+	}
+
+	function handleActionClick( e ) {
+		var btn = e.target.closest( '[data-ss-action]' );
+		if ( ! btn ) {
+			return;
+		}
+
+		e.preventDefault();
+
+		var confirmMsg = btn.getAttribute( 'data-ss-confirm' );
+		if ( confirmMsg && ! window.confirm( confirmMsg ) ) {
+			return;
+		}
+
+		var path   = btn.getAttribute( 'data-ss-action' );
+		var method = btn.getAttribute( 'data-ss-method' ) || 'POST';
+		var bodyAttr = btn.getAttribute( 'data-ss-body' );
+		var statusEl = btn.parentElement ? btn.parentElement.querySelector( '.ss-status' ) : null;
+
+		var original = btn.textContent;
+		btn.disabled = true;
+		setStatus( statusEl, StorageSherpa.i18n.working );
+
+		apiFetch( path, {
+			method: method,
+			data: bodyAttr ? JSON.parse( bodyAttr ) : undefined,
+		} )
+			.then( function () {
+				setStatus( statusEl, StorageSherpa.i18n.done );
+				if ( 'false' !== btn.getAttribute( 'data-ss-reload' ) ) {
+					window.location.reload();
+				} else {
+					btn.disabled = false;
+					btn.textContent = original;
+				}
+			} )
+			.catch( function ( err ) {
+				setStatus( statusEl, ( err && err.message ) || StorageSherpa.i18n.error );
+				btn.disabled = false;
+				btn.textContent = original;
+			} );
+	}
+
+	function handleBulkAction( e ) {
+		var form = e.target.closest( 'form[data-ss-bulk-action]' );
+		if ( ! form ) {
+			return;
+		}
+
+		var select = form.querySelector( 'select[name="ss_bulk_action"]' );
+		var action = select ? select.value : '';
+		if ( ! action || '-1' === action ) {
+			return;
+		}
+
+		var checked = Array.prototype.slice
+			.call( form.querySelectorAll( 'input[type="checkbox"][name="ss_ids[]"]:checked' ) )
+			.map( function ( cb ) {
+				return parseInt( cb.value, 10 );
+			} );
+
+		if ( ! checked.length ) {
+			e.preventDefault();
+			return;
+		}
+
+		if ( ! window.confirm( StorageSherpa.i18n.confirmDelete ) ) {
+			e.preventDefault();
+			return;
+		}
+
+		e.preventDefault();
+
+		apiFetch( form.getAttribute( 'data-ss-bulk-action' ), {
+			method: 'POST',
+			data: { ids: checked },
+		} ).then( function () {
+			window.location.reload();
+		} );
+	}
+
+	function pollScan( startBtn ) {
+		var progressEl = document.getElementById( startBtn.getAttribute( 'data-ss-progress-target' ) || 'ss-scan-progress' );
+		startBtn.disabled = true;
+
+		apiFetch( '/storage-sherpa/v1/scan/start', { method: 'POST' } ).then( function ( state ) {
+			step( state.job_id );
+		} );
+
+		function step( jobId ) {
+			apiFetch( '/storage-sherpa/v1/scan/step', { method: 'POST', data: { job_id: jobId } } ).then( function ( state ) {
+				var pct = Math.round( ( state.current / state.steps.length ) * 100 );
+				if ( progressEl ) {
+					progressEl.textContent = pct + '% (' + state.current + '/' + state.steps.length + ')';
+				}
+
+				if ( 'complete' === state.status ) {
+					startBtn.disabled = false;
+					window.location.reload();
+				} else {
+					step( jobId );
+				}
+			} );
+		}
+	}
+
+	document.addEventListener( 'DOMContentLoaded', function () {
+		document.addEventListener( 'click', handleActionClick );
+		document.addEventListener( 'click', function ( e ) {
+			var scanBtn = e.target.closest( '[data-ss-scan]' );
+			if ( scanBtn ) {
+				e.preventDefault();
+				pollScan( scanBtn );
+			}
+		} );
+		document.addEventListener( 'submit', handleBulkAction );
+
+		document.querySelectorAll( '[data-ss-select-all]' ).forEach( function ( master ) {
+			master.addEventListener( 'change', function () {
+				var form = master.closest( 'form' );
+				if ( ! form ) {
+					return;
+				}
+				form.querySelectorAll( 'input[type="checkbox"][name="ss_ids[]"]' ).forEach( function ( cb ) {
+					cb.checked = master.checked;
+				} );
+			} );
+		} );
+	} );
+} )();
