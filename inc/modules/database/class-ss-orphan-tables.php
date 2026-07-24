@@ -5,11 +5,15 @@
  * There's no registry mapping "table X belongs to plugin Y", so this is
  * necessarily a best-effort heuristic, not a certainty: any {$wpdb->prefix}
  * table that (a) isn't a WordPress core table and (b) doesn't contain any
- * currently-active plugin or theme's slug as a substring gets listed as a
- * candidate, with the "estimated plugin" being the guessed slug fragment.
- * Never auto-deleted — the spec calls this "delete manually" for exactly
- * that reason. drop_table() takes a full CREATE TABLE + row dump backup
- * before dropping, restorable from the Recovery Center like anything else.
+ * currently-active plugin or theme's slug as a substring, AND (c) doesn't
+ * start with an abbreviation derived from an active plugin's own display
+ * name (see known_table_prefixes() — this is what catches plugins like Easy
+ * Digital Downloads, whose `edd_*` tables share nothing with its
+ * `easy-digital-downloads` folder slug), gets listed as a candidate, with
+ * the "estimated plugin" being the guessed slug fragment. Never
+ * auto-deleted — the spec calls this "delete manually" for exactly that
+ * reason. drop_table() takes a full CREATE TABLE + row dump backup before
+ * dropping, restorable from the Recovery Center like anything else.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -47,14 +51,29 @@ class SS_Orphan_Tables {
 	}
 
 	/**
-	 * Slug fragments considered "in use": every active plugin's directory
-	 * slug, the active theme's stylesheet/template slugs, and WooCommerce's
-	 * own known table family (always active-plugin-detectable via its slug).
+	 * Every active plugin file (site-level, plus network-activated ones on
+	 * multisite), as the `folder/file.php` strings WordPress stores them as.
+	 */
+	private static function active_plugin_files() {
+		$files = (array) get_option( 'active_plugins', array() );
+
+		if ( is_multisite() ) {
+			$files = array_merge( $files, array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) ) );
+		}
+
+		return array_unique( $files );
+	}
+
+	/**
+	 * Slug fragments considered "in use" via a loose contains-anywhere
+	 * match: every active plugin's directory slug and the active theme's
+	 * stylesheet/template slugs. Works for the common case where a plugin's
+	 * own tables are named after its folder (WooCommerce, Elementor, etc.).
 	 */
 	private static function known_slugs() {
 		$slugs = array();
 
-		foreach ( (array) get_option( 'active_plugins', array() ) as $plugin_file ) {
+		foreach ( self::active_plugin_files() as $plugin_file ) {
 			$slug = strtok( $plugin_file, '/' );
 			$slugs[] = strtolower( str_replace( '-', '', $slug ) );
 			$slugs[] = strtolower( str_replace( '-', '_', $slug ) );
@@ -65,6 +84,106 @@ class SS_Orphan_Tables {
 		$slugs[] = strtolower( str_replace( '-', '', $theme->get_template() ) );
 
 		return array_unique( array_filter( $slugs ) );
+	}
+
+	/**
+	 * Plenty of active plugins ship DB tables prefixed with an abbreviation
+	 * that bears no resemblance to their own folder slug — Easy Digital
+	 * Downloads' tables are `{$wpdb->prefix}edd_*`, not
+	 * `{$wpdb->prefix}easydigitaldownloads_*`; Gravity Forms uses `gf_*`;
+	 * this very plugin's own tables are `{$wpdb->prefix}ss_*`, not
+	 * `{$wpdb->prefix}storagesherpa_*`. known_slugs()'s folder-slug matching
+	 * can never connect a table like that back to the plugin that owns it,
+	 * even while the plugin is active and using the table every day.
+	 *
+	 * Rather than hardcode a list of known plugins, this derives the same
+	 * kind of abbreviation any plugin author would land on from the
+	 * plugin's own declared display name (its "Name:" header) — initials
+	 * ("Easy Digital Downloads" → "edd", "Storage Sherpa" → "ss") and the
+	 * first word ("Yoast SEO" → "yoast"). Only ever built from plugins
+	 * WordPress confirms are active right now, so a table only gets
+	 * whitelisted when the plugin that owns it verifiably is too.
+	 *
+	 * Matched with an anchored prefix check (see remainder_matches_prefix())
+	 * rather than known_slugs()'s loose "contains anywhere", since a 2-3
+	 * letter abbreviation like "gf" or "ss" is short enough that requiring
+	 * it to actually be the table's prefix — not just appear somewhere in
+	 * the name — matters for avoiding accidental matches.
+	 */
+	private static function known_table_prefixes() {
+		if ( ! function_exists( 'get_plugin_data' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		$prefixes = array();
+
+		foreach ( self::active_plugin_files() as $plugin_file ) {
+			$path = WP_PLUGIN_DIR . '/' . $plugin_file;
+
+			if ( ! is_readable( $path ) ) {
+				continue;
+			}
+
+			$data = get_plugin_data( $path, false, false );
+
+			if ( empty( $data['Name'] ) ) {
+				continue;
+			}
+
+			$prefixes = array_merge( $prefixes, self::derive_prefix_candidates( $data['Name'] ) );
+		}
+
+		return array_unique( $prefixes );
+	}
+
+	/**
+	 * "Easy Digital Downloads" → array( 'edd', 'easy' );
+	 * "Storage Sherpa" → array( 'ss', 'storage' );
+	 * "WooCommerce" → array() — a single-word name has no initials worth
+	 * deriving, and its first word is already covered by known_slugs()'s
+	 * folder-slug match.
+	 */
+	private static function derive_prefix_candidates( $name ) {
+		$words = array_values( array_filter( preg_split( '/[\s\-]+/', (string) $name ) ) );
+
+		if ( count( $words ) < 2 ) {
+			return array();
+		}
+
+		$candidates = array();
+		$initials   = '';
+
+		foreach ( $words as $word ) {
+			$letter = strtolower( substr( preg_replace( '/[^a-z0-9]/i', '', $word ), 0, 1 ) );
+			$initials .= $letter;
+		}
+
+		if ( strlen( $initials ) >= 2 ) {
+			$candidates[] = $initials;
+		}
+
+		$first_word = strtolower( preg_replace( '/[^a-z0-9]/i', '', $words[0] ) );
+
+		if ( strlen( $first_word ) >= 3 ) {
+			$candidates[] = $first_word;
+		}
+
+		return $candidates;
+	}
+
+	/**
+	 * True when $remainder's table-name-after-the-wpdb-prefix genuinely
+	 * starts with $prefix as its own segment — `edd_adjustments` matches
+	 * `edd`, `nf3_entries` matches `nf` (versioned prefixes), and a bare
+	 * `edd` table (no trailing underscore) matches too — but `eddington_log`
+	 * does not, which a plain "starts with" check would have wrongly allowed.
+	 */
+	private static function remainder_matches_prefix( $remainder, $prefix ) {
+		if ( ! $prefix ) {
+			return false;
+		}
+
+		return (bool) preg_match( '/^' . preg_quote( $prefix, '/' ) . '(_|\d|$)/', $remainder );
 	}
 
 	public static function scan() {
@@ -85,9 +204,10 @@ class SS_Orphan_Tables {
 			)
 		); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
-		$core   = self::core_tables();
-		$slugs  = self::known_slugs();
-		$suffix = substr( $wpdb->prefix, -1 ) === '_' ? $wpdb->prefix : $wpdb->prefix . '_';
+		$core     = self::core_tables();
+		$slugs    = self::known_slugs();
+		$prefixes = self::known_table_prefixes();
+		$suffix   = substr( $wpdb->prefix, -1 ) === '_' ? $wpdb->prefix : $wpdb->prefix . '_';
 
 		$orphans = array();
 
@@ -105,6 +225,15 @@ class SS_Orphan_Tables {
 				if ( $slug && false !== strpos( $remainder, $slug ) ) {
 					$matched = true;
 					break;
+				}
+			}
+
+			if ( ! $matched ) {
+				foreach ( $prefixes as $prefix ) {
+					if ( self::remainder_matches_prefix( $remainder, $prefix ) ) {
+						$matched = true;
+						break;
+					}
 				}
 			}
 
