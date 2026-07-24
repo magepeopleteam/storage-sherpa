@@ -1,5 +1,5 @@
 === Storage Sherpa ===
-Contributors: storagesherpa
+Contributors: magepeopleteam
 Tags: storage, cleanup, database, media, optimization
 Requires at least: 6.5
 Tested up to: 6.7

@@ -503,6 +503,15 @@ class SS_Orphan_Media_Scanner {
 	 * scanner already uses — extract_url_ids() against self::$url_map — only
 	 * needs the "uploads/…something.ext" portion of the URL to resolve, so
 	 * it survives all of the above.
+	 *
+	 * A third, last-resort fallback matches by filename alone: if the file
+	 * was ever moved to a different uploads subfolder after EDD recorded
+	 * this URL — a media reorganization plugin, a manual move, a domain/URL
+	 * migration that only rewrote some tables — the recorded relative path
+	 * no longer matches self::$url_map either, even though a file with the
+	 * exact same name is still a real, current attachment. Matching on
+	 * filename alone is inherently looser than the two path-exact checks
+	 * above, so it only runs when both of them have already failed.
 	 */
 	private static function resolve_download_file_attachment_id( $url ) {
 		$attachment_id = attachment_url_to_postid( $url );
@@ -511,9 +520,47 @@ class SS_Orphan_Media_Scanner {
 			return $attachment_id;
 		}
 
-		$ids = self::extract_url_ids( html_entity_decode( $url ) );
+		$decoded = html_entity_decode( $url );
+		$ids     = self::extract_url_ids( $decoded );
 
-		return $ids ? (int) reset( $ids ) : 0;
+		if ( $ids ) {
+			return (int) reset( $ids );
+		}
+
+		return self::resolve_by_basename( $decoded );
+	}
+
+	/**
+	 * Matches a URL's bare filename against every known attachment's
+	 * (base file + every thumbnail size) relative path in self::$url_map —
+	 * see resolve_download_file_attachment_id() for why this exists. Only
+	 * matches when the filename is unambiguous (belongs to exactly one
+	 * attachment among the paths this scan already indexed); an ambiguous
+	 * filename is left unresolved rather than guessing which attachment it
+	 * really is.
+	 */
+	private static function resolve_by_basename( $url ) {
+		$path = wp_parse_url( $url, PHP_URL_PATH );
+
+		if ( ! $path ) {
+			return 0;
+		}
+
+		$basename = wp_basename( $path );
+
+		if ( ! $basename || false === strpos( $basename, '.' ) ) {
+			return 0;
+		}
+
+		$matches = array();
+
+		foreach ( (array) self::$url_map as $relative => $id ) {
+			if ( wp_basename( $relative ) === $basename ) {
+				$matches[ (int) $id ] = true;
+			}
+		}
+
+		return 1 === count( $matches ) ? array_key_first( $matches ) : 0;
 	}
 
 	/**

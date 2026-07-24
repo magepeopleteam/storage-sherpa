@@ -43,6 +43,7 @@ class SS_Admin {
 			'storage-sherpa'          => array( __( 'Dashboard', 'storage-sherpa' ), array( 'SS_Dashboard', 'render' ) ),
 			'storage-sherpa-scan'     => array( __( 'Storage Analyzer', 'storage-sherpa' ), array( 'SS_Scan_Page', 'render' ) ),
 			'storage-sherpa-media'    => array( __( 'Media Findings', 'storage-sherpa' ), array( 'SS_Media_Page', 'render' ) ),
+			'storage-sherpa-images'   => array( __( 'Image Optimizer', 'storage-sherpa' ), array( 'SS_Images_Page', 'render' ) ),
 			'storage-sherpa-database' => array( __( 'Database Cleanup', 'storage-sherpa' ), array( 'SS_Database_Page', 'render' ) ),
 			'storage-sherpa-tables'   => array( __( 'Orphan Tables', 'storage-sherpa' ), array( 'SS_Tables_Page', 'render' ) ),
 			'storage-sherpa-backups'  => array( __( 'Backups', 'storage-sherpa' ), array( 'SS_Backups_Page', 'render' ) ),
@@ -89,6 +90,7 @@ class SS_Admin {
 			'storage-sherpa'           => array( __( 'Dashboard', 'storage-sherpa' ), 'dashicons-dashboard' ),
 			'storage-sherpa-scan'      => array( __( 'Storage Analyzer', 'storage-sherpa' ), 'dashicons-chart-bar' ),
 			'storage-sherpa-media'     => array( __( 'Media Findings', 'storage-sherpa' ), 'dashicons-format-image' ),
+			'storage-sherpa-images'    => array( __( 'Image Optimizer', 'storage-sherpa' ), 'dashicons-images-alt2' ),
 			'storage-sherpa-database'  => array( __( 'Database Cleanup', 'storage-sherpa' ), 'dashicons-database' ),
 			'storage-sherpa-tables'    => array( __( 'Orphan Tables', 'storage-sherpa' ), 'dashicons-editor-table' ),
 			'storage-sherpa-backups'   => array( __( 'Backups', 'storage-sherpa' ), 'dashicons-backup' ),
@@ -273,6 +275,41 @@ class SS_Admin {
 						'fetchingIds'       => __( 'Finding matching items…', 'storage-sherpa' ),
 						/* translators: %1$d: items processed so far, %2$d: total items being deleted */
 						'progress'          => __( '%1$d of %2$d processed…', 'storage-sherpa' ),
+					),
+				)
+			);
+
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only, only decides which tab-specific script to enqueue.
+			$media_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'orphan';
+
+			if ( 'duplicate' === $media_tab ) {
+				wp_enqueue_script(
+					'storage-sherpa-duplicates',
+					STORAGE_SHERPA_PLUGIN_URL . '/assets/admin/js/storage-sherpa-duplicates.js',
+					array( 'wp-api-fetch', 'storage-sherpa-admin' ),
+					STORAGE_SHERPA_PLUGIN_VERSION,
+					true
+				);
+			}
+		}
+
+		if ( 'storage-sherpa-images' === $plugin_page ) {
+			wp_enqueue_script(
+				'storage-sherpa-images',
+				STORAGE_SHERPA_PLUGIN_URL . '/assets/admin/js/storage-sherpa-images.js',
+				array( 'wp-api-fetch', 'storage-sherpa-admin' ),
+				STORAGE_SHERPA_PLUGIN_VERSION,
+				true
+			);
+
+			wp_localize_script(
+				'storage-sherpa-images',
+				'StorageSherpaImages',
+				array(
+					'i18n' => array(
+						'confirmCompress' => __( 'Re-encode every selected image at a lower quality? Each original is backed up to Safe Trash first.', 'storage-sherpa' ),
+						/* translators: %1$d: images processed so far, %2$d: total images in this bulk action */
+						'progress'        => __( '%1$d of %2$d processed…', 'storage-sherpa' ),
 					),
 				)
 			);

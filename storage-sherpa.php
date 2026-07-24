@@ -1,10 +1,10 @@
 <?php
 /**
  * Plugin Name: Storage Sherpa
- * Plugin URI: https://example.com/storage-sherpa
+ * Plugin URI: http://mage-people.com
  * Description: The smart WordPress storage optimizer. Scan the entire install, find orphan/duplicate media, clean the database, and reclaim disk space — safely, with every deletion recoverable from a Safe Trash before it's ever permanent.
  * Version: 1.0.0
- * Author: Storage Sherpa
+ * Author: MagePeople Team
  * Text Domain: storage-sherpa
  * Domain Path: /languages
  * Requires at least: 6.5
@@ -19,7 +19,14 @@ define( 'STORAGE_SHERPA_PLUGIN_FILE', __FILE__ );
 define( 'STORAGE_SHERPA_PLUGIN_DIR', __DIR__ );
 define( 'STORAGE_SHERPA_PLUGIN_URL', plugins_url( '', __FILE__ ) );
 define( 'STORAGE_SHERPA_PLUGIN_VERSION', '1.1.0' );
-define( 'STORAGE_SHERPA_DB_VERSION', '1.1.0' );
+// Bumped from 1.1.0: an earlier change added `batch_id` to the ss_trash_items
+// CREATE TABLE SQL (SS_Install::create_tables()) without bumping this
+// constant, so any site whose table was already created under 1.1.0 never
+// got the new column — maybe_upgrade() only re-runs dbDelta() when this
+// differs from the stored 'storage_sherpa_db_version' option. dbDelta() is
+// additive/idempotent, so this re-run is safe on every site regardless of
+// whether it already has the column.
+define( 'STORAGE_SHERPA_DB_VERSION', '1.1.1' );
 
 require_once STORAGE_SHERPA_PLUGIN_DIR . '/inc/SS_Functions.php';
 require_once STORAGE_SHERPA_PLUGIN_DIR . '/inc/SS_Install.php';
@@ -73,6 +80,7 @@ if ( is_admin() ) {
 	require_once STORAGE_SHERPA_PLUGIN_DIR . '/admin/SS_Dashboard.php';
 	require_once STORAGE_SHERPA_PLUGIN_DIR . '/admin/SS_Scan_Page.php';
 	require_once STORAGE_SHERPA_PLUGIN_DIR . '/admin/SS_Media_Page.php';
+	require_once STORAGE_SHERPA_PLUGIN_DIR . '/admin/SS_Images_Page.php';
 	require_once STORAGE_SHERPA_PLUGIN_DIR . '/admin/SS_Database_Page.php';
 	require_once STORAGE_SHERPA_PLUGIN_DIR . '/admin/SS_Tables_Page.php';
 	require_once STORAGE_SHERPA_PLUGIN_DIR . '/admin/SS_Backups_Page.php';

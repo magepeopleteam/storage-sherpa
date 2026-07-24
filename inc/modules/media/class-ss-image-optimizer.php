@@ -111,6 +111,39 @@ class SS_Image_Optimizer {
 		return $out;
 	}
 
+	/**
+	 * scan()'s three buckets can each list the same attachment (an image can
+	 * be oversized AND missing both siblings at once) — this merges them
+	 * into one row per attachment id with a flag per condition, which is
+	 * what the Image Optimizer admin screen actually wants to render: one
+	 * row, badges for whichever conditions apply, one set of row actions.
+	 */
+	public static function scan_merged( $time_budget = 20 ) {
+		$buckets = self::scan( $time_budget );
+		$merged  = array();
+
+		foreach ( array( 'oversized', 'missing_webp', 'missing_avif' ) as $bucket ) {
+			foreach ( $buckets[ $bucket ] as $row ) {
+				$id = (int) $row['attachment_id'];
+
+				if ( ! isset( $merged[ $id ] ) ) {
+					$merged[ $id ] = array(
+						'attachment_id' => $id,
+						'file_path'     => $row['file_path'],
+						'file_size'     => $row['file_size'],
+						'oversized'     => false,
+						'missing_webp'  => false,
+						'missing_avif'  => false,
+					);
+				}
+
+				$merged[ $id ][ $bucket ] = true;
+			}
+		}
+
+		return array_values( $merged );
+	}
+
 	private static function sibling_path( $file, $ext ) {
 		return preg_replace( '/\.[a-zA-Z0-9]+$/', '.' . $ext, $file );
 	}

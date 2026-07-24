@@ -346,14 +346,21 @@ class SS_Media_Page {
 
 		$tabs       = self::tabs();
 		$active_tab = isset( $_GET['tab'] ) && isset( $tabs[ $_GET['tab'] ] ) ? sanitize_key( $_GET['tab'] ) : 'orphan'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only tab switch.
+		$is_duplicates_tab = ( 'duplicate' === $active_tab );
 
 		list( , $finding_type ) = $tabs[ $active_tab ];
 
-		$table = new SS_Media_Findings_Table( $finding_type );
-		$table->prepare_items();
-		$search           = $table->current_search();
-		$status_filter    = $table->current_status_filter();
-		$file_type_filter = $table->current_file_type_filter();
+		// The Duplicates tab uses its own grouped visual-compare view below
+		// (render_duplicates_view()) instead of the shared flat findings
+		// table every other tab uses — a duplicate group only makes sense
+		// shown side by side, not as independent rows.
+		if ( ! $is_duplicates_tab ) {
+			$table = new SS_Media_Findings_Table( $finding_type );
+			$table->prepare_items();
+			$search           = $table->current_search();
+			$status_filter    = $table->current_status_filter();
+			$file_type_filter = $table->current_file_type_filter();
+		}
 		?>
 		<?php SS_Admin::header( __( 'Media Findings', 'storage-sherpa' ) ); ?>
 
@@ -395,73 +402,83 @@ class SS_Media_Page {
 				</button>
 				<span class="ss-status"></span>
 
-				<form id="ss-media-search-form" class="ss-media-search-w" method="get">
-					<input type="hidden" name="page" value="storage-sherpa-media" />
-					<input type="hidden" name="tab" value="<?php echo esc_attr( $active_tab ); ?>" />
-					<?php if ( '' !== $status_filter ) : ?>
-						<input type="hidden" name="status" value="<?php echo esc_attr( $status_filter ); ?>" />
-					<?php endif; ?>
-					<span class="dashicons dashicons-search" aria-hidden="true"></span>
-					<input
-						type="search"
-						id="ss-media-search"
-						name="s"
-						value="<?php echo esc_attr( $search ); ?>"
-						placeholder="<?php esc_attr_e( 'Search by file name…', 'storage-sherpa' ); ?>"
-					/>
-					<button type="submit" class="screen-reader-text"><?php esc_html_e( 'Search', 'storage-sherpa' ); ?></button>
-				</form>
+				<?php if ( ! $is_duplicates_tab ) : ?>
+					<form id="ss-media-search-form" class="ss-media-search-w" method="get">
+						<input type="hidden" name="page" value="storage-sherpa-media" />
+						<input type="hidden" name="tab" value="<?php echo esc_attr( $active_tab ); ?>" />
+						<?php if ( '' !== $status_filter ) : ?>
+							<input type="hidden" name="status" value="<?php echo esc_attr( $status_filter ); ?>" />
+						<?php endif; ?>
+						<span class="dashicons dashicons-search" aria-hidden="true"></span>
+						<input
+							type="search"
+							id="ss-media-search"
+							name="s"
+							value="<?php echo esc_attr( $search ); ?>"
+							placeholder="<?php esc_attr_e( 'Search by file name…', 'storage-sherpa' ); ?>"
+						/>
+						<button type="submit" class="screen-reader-text"><?php esc_html_e( 'Search', 'storage-sherpa' ); ?></button>
 
-				<?php if ( 'orphan' === $active_tab ) : ?>
-					<label class="ss-media-filetype-w" for="ss-media-filetype">
-						<span class="screen-reader-text"><?php esc_html_e( 'Filter by file type', 'storage-sherpa' ); ?></span>
-						<select id="ss-media-filetype" form="ss-media-search-form" name="file_type">
-							<option value=""><?php esc_html_e( 'All file types', 'storage-sherpa' ); ?></option>
-							<?php foreach ( SS_Filetype_Analyzer::labels() as $key => $label ) : ?>
-								<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $file_type_filter, $key ); ?>>
-									<?php echo esc_html( $label ); ?>
-								</option>
-							<?php endforeach; ?>
-						</select>
-					</label>
+						<?php if ( 'orphan' === $active_tab ) : ?>
+							<label class="ss-media-filetype-w" for="ss-media-filetype">
+								<span class="screen-reader-text"><?php esc_html_e( 'Filter by file type', 'storage-sherpa' ); ?></span>
+								<select id="ss-media-filetype" name="file_type">
+									<option value=""><?php esc_html_e( 'All file types', 'storage-sherpa' ); ?></option>
+									<?php foreach ( SS_Filetype_Analyzer::labels() as $key => $label ) : ?>
+										<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $file_type_filter, $key ); ?>>
+											<?php echo esc_html( $label ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+							</label>
+						<?php endif; ?>
+					</form>
 				<?php endif; ?>
 			</div>
 
-			<div id="ss-media-selection-bar" class="ss-media-selection-bar" hidden>
-				<span id="ss-media-selection-text"></span>
-				<button type="button" id="ss-media-select-all-matching" class="button-link" hidden></button>
-				<button type="button" id="ss-media-clear-selection" class="button-link"><?php esc_html_e( 'Clear selection', 'storage-sherpa' ); ?></button>
-			</div>
+			<?php if ( $is_duplicates_tab ) : ?>
 
-			<div id="ss-media-progress" class="ss-media-progress" hidden role="status" aria-live="polite">
-				<div class="ss-media-progress-track"><div class="ss-media-progress-fill"></div></div>
-				<span id="ss-media-progress-label" class="ss-media-progress-label"></span>
-				<button type="button" id="ss-media-progress-cancel" class="button-link"><?php esc_html_e( 'Cancel', 'storage-sherpa' ); ?></button>
-			</div>
+				<?php self::render_duplicates_view(); ?>
 
-			<div
-				id="ss-media-table-region"
-				data-tab="<?php echo esc_attr( $active_tab ); ?>"
-				data-status="<?php echo esc_attr( $status_filter ); ?>"
-				data-search="<?php echo esc_attr( $search ); ?>"
-				data-file-type="<?php echo esc_attr( $file_type_filter ); ?>"
-				data-total-items="<?php echo (int) $table->get_pagination_arg( 'total_items' ); ?>"
-			>
-				<?php $table->views(); ?>
+			<?php else : ?>
 
-				<form data-ss-bulk-trash="/storage-sherpa/v1/media/trash" id="ss-media-bulk-form">
-					<div class="tablenav top">
-						<div class="alignleft actions">
-							<select name="ss_bulk_action">
-								<option value="-1"><?php esc_html_e( 'Bulk actions', 'storage-sherpa' ); ?></option>
-								<option value="trash"><?php esc_html_e( 'Move to Safe Trash', 'storage-sherpa' ); ?></option>
-							</select>
-							<input type="submit" class="button action" value="<?php esc_attr_e( 'Apply', 'storage-sherpa' ); ?>" />
+				<div id="ss-media-selection-bar" class="ss-media-selection-bar" hidden>
+					<span id="ss-media-selection-text"></span>
+					<button type="button" id="ss-media-select-all-matching" class="button-link" hidden></button>
+					<button type="button" id="ss-media-clear-selection" class="button-link"><?php esc_html_e( 'Clear selection', 'storage-sherpa' ); ?></button>
+				</div>
+
+				<div id="ss-media-progress" class="ss-media-progress" hidden role="status" aria-live="polite">
+					<div class="ss-media-progress-track"><div class="ss-media-progress-fill"></div></div>
+					<span id="ss-media-progress-label" class="ss-media-progress-label"></span>
+					<button type="button" id="ss-media-progress-cancel" class="button-link"><?php esc_html_e( 'Cancel', 'storage-sherpa' ); ?></button>
+				</div>
+
+				<div
+					id="ss-media-table-region"
+					data-tab="<?php echo esc_attr( $active_tab ); ?>"
+					data-status="<?php echo esc_attr( $status_filter ); ?>"
+					data-search="<?php echo esc_attr( $search ); ?>"
+					data-file-type="<?php echo esc_attr( $file_type_filter ); ?>"
+					data-total-items="<?php echo (int) $table->get_pagination_arg( 'total_items' ); ?>"
+				>
+					<?php $table->views(); ?>
+
+					<form data-ss-bulk-trash="/storage-sherpa/v1/media/trash" id="ss-media-bulk-form">
+						<div class="tablenav top">
+							<div class="alignleft actions">
+								<select name="ss_bulk_action">
+									<option value="-1"><?php esc_html_e( 'Bulk actions', 'storage-sherpa' ); ?></option>
+									<option value="trash"><?php esc_html_e( 'Move to Safe Trash', 'storage-sherpa' ); ?></option>
+								</select>
+								<input type="submit" class="button action" value="<?php esc_attr_e( 'Apply', 'storage-sherpa' ); ?>" />
+							</div>
 						</div>
-					</div>
-					<?php $table->display(); ?>
-				</form>
-			</div>
+						<?php $table->display(); ?>
+					</form>
+				</div>
+
+			<?php endif; ?>
 
 			<?php if ( class_exists( 'SS_Break_Test' ) ) : ?>
 				<?php $running_tests = SS_Break_Test::list_running(); ?>
@@ -498,6 +515,109 @@ class SS_Media_Page {
 				<?php endif; ?>
 			<?php endif; ?>
 		<?php SS_Admin::footer(); ?>
+		<?php
+	}
+
+	/**
+	 * The Duplicates tab's grouped visual-compare view — one card per
+	 * group_hash with every copy shown side by side (thumbnail for images,
+	 * a generic file icon for the non-image types this scanner also covers:
+	 * PDFs, video, audio, documents, archives). A radio per item lets the
+	 * admin pick which copy to keep (defaulting to the oldest upload, the
+	 * same "original" SS_Duplicate_Finder::scan() already picked), then
+	 * either:
+	 *  - "Keep selected — merge & trash the rest": the recommended path,
+	 *    re-points known-safe references before trashing (see
+	 *    SS_Duplicate_Finder::merge_attachment()) — matters here because,
+	 *    unlike Orphan Media, this scanner never checks whether a given copy
+	 *    is itself in use anywhere.
+	 *  - "Trash unselected (no re-pointing)": a plain Safe Trash delete via
+	 *    the same /media/trash endpoint every other tab uses, for admins who
+	 *    already know none of the other copies are referenced elsewhere.
+	 */
+	private static function render_duplicates_view() {
+		$groups = SS_Duplicate_Finder::grouped_findings();
+		?>
+		<?php if ( empty( $groups ) ) : ?>
+			<div class="ss-section">
+				<p class="ss-muted"><?php esc_html_e( 'No duplicate files found. Run a scan to check again.', 'storage-sherpa' ); ?></p>
+			</div>
+		<?php endif; ?>
+
+		<?php foreach ( $groups as $group_hash => $items ) : ?>
+			<?php
+			$per_copy_size = $items ? (int) $items[0]->file_size : 0;
+			$reclaimable   = $per_copy_size * max( 0, count( $items ) - 1 );
+			?>
+			<div class="ss-dup-group" data-group-hash="<?php echo esc_attr( $group_hash ); ?>">
+				<div class="ss-dup-group-header">
+					<span>
+						<?php
+						printf(
+							/* translators: 1: number of copies found, 2: space that could be reclaimed by merging */
+							esc_html__( '%1$d copies of this file · reclaim %2$s by merging', 'storage-sherpa' ),
+							count( $items ),
+							esc_html( storage_sherpa_format_bytes( $reclaimable ) )
+						);
+						?>
+					</span>
+				</div>
+				<div class="ss-dup-group-items">
+					<?php foreach ( $items as $item ) : ?>
+						<?php
+						$is_image = $item->attachment_id && wp_attachment_is_image( $item->attachment_id );
+						$thumb    = $is_image ? wp_get_attachment_image_src( $item->attachment_id, 'medium' ) : false;
+						$post     = $item->attachment_id ? get_post( $item->attachment_id ) : null;
+						?>
+						<label
+							class="ss-dup-item"
+							data-attachment-id="<?php echo (int) $item->attachment_id; ?>"
+							data-finding-id="<?php echo (int) $item->id; ?>"
+						>
+							<input
+								type="radio"
+								name="ss-dup-keep-<?php echo esc_attr( $group_hash ); ?>"
+								value="<?php echo (int) $item->attachment_id; ?>"
+								<?php checked( 'original' === $item->status ); ?>
+							/>
+							<span class="ss-dup-thumb">
+								<?php if ( $thumb ) : ?>
+									<img src="<?php echo esc_url( $thumb[0] ); ?>" alt="" />
+								<?php else : ?>
+									<span class="dashicons dashicons-media-default" aria-hidden="true"></span>
+								<?php endif; ?>
+							</span>
+							<span class="ss-dup-meta">
+								<span class="ss-dup-filename"><?php echo esc_html( basename( $item->file_path ) ); ?></span>
+								<span class="ss-dup-details">
+									<?php echo esc_html( storage_sherpa_format_bytes( $item->file_size ) ); ?>
+									<?php if ( $post ) : ?>
+										&middot; <?php echo esc_html( mysql2date( get_option( 'date_format' ), $post->post_date ) ); ?>
+									<?php endif; ?>
+								</span>
+								<?php if ( 'original' === $item->status ) : ?>
+									<span class="ss-badge ss-badge-original"><?php esc_html_e( 'Oldest upload', 'storage-sherpa' ); ?></span>
+								<?php endif; ?>
+							</span>
+						</label>
+					<?php endforeach; ?>
+				</div>
+				<div class="ss-dup-group-actions">
+					<button type="button" class="button button-primary" data-ss-merge-group>
+						<?php esc_html_e( 'Keep selected — merge & trash the rest', 'storage-sherpa' ); ?>
+					</button>
+					<button
+						type="button"
+						class="button"
+						data-ss-trash-others
+						data-ss-confirm="<?php esc_attr_e( 'Move the unselected copies to Safe Trash without re-pointing any references to them? Only do this if you already know none of them are used elsewhere on your site.', 'storage-sherpa' ); ?>"
+					>
+						<?php esc_html_e( 'Trash unselected (no re-pointing)', 'storage-sherpa' ); ?>
+					</button>
+					<span class="ss-status"></span>
+				</div>
+			</div>
+		<?php endforeach; ?>
 		<?php
 	}
 }

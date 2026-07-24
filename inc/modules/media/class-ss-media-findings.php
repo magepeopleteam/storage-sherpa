@@ -218,6 +218,24 @@ class SS_Media_Findings {
 		return (bool) $wpdb->delete( $wpdb->prefix . 'ss_media_findings', array( 'id' => (int) $id ), array( '%d' ) );
 	}
 
+	/**
+	 * Removes every finding row for a given attachment within one finding
+	 * type — used after SS_Duplicate_Finder::merge_attachment() trashes the
+	 * attachment itself, since the finding row is keyed by its own id, not
+	 * the attachment id the merge flow naturally has on hand.
+	 */
+	public static function delete_by_attachment( $finding_type, $attachment_id ) {
+		global $wpdb;
+		return (int) $wpdb->delete(
+			$wpdb->prefix . 'ss_media_findings',
+			array(
+				'finding_type'  => $finding_type,
+				'attachment_id' => (int) $attachment_id,
+			),
+			array( '%s', '%d' )
+		);
+	}
+
 	public static function counts( $finding_type ) {
 		global $wpdb;
 

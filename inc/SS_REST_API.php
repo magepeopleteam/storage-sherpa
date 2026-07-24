@@ -97,6 +97,19 @@ class SS_REST_API {
 				),
 			)
 		);
+		register_rest_route(
+			self::NS,
+			'/media/duplicate/merge',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'media_duplicate_merge' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'group_hash' => array( 'required' => true ),
+					'keep_id'    => array( 'required' => true ),
+				),
+			)
+		);
 
 		// --- Module 28: Break Test mode --------------------------------------
 		register_rest_route(
@@ -385,6 +398,59 @@ class SS_REST_API {
 	public static function trash_restore_batch( WP_REST_Request $request ) {
 		$result = SS_Trash::restore_batch( $request->get_param( 'batch_id' ) );
 		return self::maybe_error( $result ) ?? self::ok( $result );
+	}
+
+	/**
+	 * The Duplicate Finder's merge tool: re-points every reference this
+	 * plugin can safely find from every OTHER member of the duplicate group
+	 * to keep_id, then trashes each of them — see
+	 * SS_Duplicate_Finder::merge_attachment() for the full explanation of
+	 * why re-pointing (not a plain delete) is what makes this safe. keep_id
+	 * is validated against the group's actual findings so a client can't
+	 * merge attachments that were never part of this duplicate group.
+	 */
+	public static function media_duplicate_merge( WP_REST_Request $request ) {
+		$group_hash = sanitize_text_field( (string) $request->get_param( 'group_hash' ) );
+		$keep_id    = (int) $request->get_param( 'keep_id' );
+
+		$groups = SS_Duplicate_Finder::grouped_findings();
+
+		if ( ! isset( $groups[ $group_hash ] ) ) {
+			return self::maybe_error( new WP_Error( 'ss_not_found', __( 'This duplicate group no longer exists — try rescanning.', 'storage-sherpa' ) ) );
+		}
+
+		$group_attachment_ids = wp_list_pluck( $groups[ $group_hash ], 'attachment_id' );
+
+		if ( ! in_array( $keep_id, array_map( 'intval', $group_attachment_ids ), true ) ) {
+			return self::maybe_error( new WP_Error( 'ss_invalid_selection', __( 'The item you chose to keep is not part of this duplicate group.', 'storage-sherpa' ) ) );
+		}
+
+		$batch_id = wp_generate_password( 20, false, false );
+		$merged   = array();
+		$errors   = array();
+
+		foreach ( $group_attachment_ids as $attachment_id ) {
+			$attachment_id = (int) $attachment_id;
+			if ( $attachment_id === $keep_id ) {
+				continue;
+			}
+
+			$result = SS_Duplicate_Finder::merge_attachment( $attachment_id, $keep_id, $batch_id );
+
+			if ( is_wp_error( $result ) ) {
+				$errors[ $attachment_id ] = $result->get_error_message();
+			} else {
+				$merged[ $attachment_id ] = $result['references_updated'];
+			}
+		}
+
+		return self::ok(
+			array(
+				'merged'   => $merged,
+				'errors'   => $errors,
+				'batch_id' => $batch_id,
+			)
+		);
 	}
 
 	// ---------------------------------------------------------------------
