@@ -204,8 +204,11 @@ class SS_Media_Findings_Table extends WP_List_Table {
 
 		if ( $item->attachment_id && wp_attachment_is_image( $item->attachment_id ) ) {
 			$thumb = wp_get_attachment_image_src( $item->attachment_id, 'thumbnail' );
+			$full  = wp_get_attachment_image_src( $item->attachment_id, 'full' );
 			if ( $thumb ) {
-				$img = '<img class="ss-thumb" src="' . esc_url( $thumb[0] ) . '" alt="" /> ';
+				$img = '<img class="ss-thumb"'
+					. ( $full ? ' data-ss-zoom="' . esc_url( $full[0] ) . '"' : '' )
+					. ' src="' . esc_url( $thumb[0] ) . '" alt="" /> ';
 			}
 		}
 
@@ -589,6 +592,7 @@ class SS_Media_Page {
 						<?php
 						$is_image = $item->attachment_id && wp_attachment_is_image( $item->attachment_id );
 						$thumb    = $is_image ? wp_get_attachment_image_src( $item->attachment_id, 'medium' ) : false;
+						$full     = $is_image ? wp_get_attachment_image_src( $item->attachment_id, 'full' ) : false;
 						$post     = $item->attachment_id ? get_post( $item->attachment_id ) : null;
 						?>
 						<label
@@ -604,7 +608,11 @@ class SS_Media_Page {
 							/>
 							<span class="ss-dup-thumb">
 								<?php if ( $thumb ) : ?>
-									<img src="<?php echo esc_url( $thumb[0] ); ?>" alt="" />
+									<img
+										src="<?php echo esc_url( $thumb[0] ); ?>"
+										alt=""
+										<?php if ( $full ) : ?>data-ss-zoom="<?php echo esc_url( $full[0] ); ?>"<?php endif; ?>
+									/>
 								<?php else : ?>
 									<span class="dashicons dashicons-media-default" aria-hidden="true"></span>
 								<?php endif; ?>

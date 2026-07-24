@@ -197,8 +197,69 @@
 		}
 	}
 
+	/**
+	 * Click-to-zoom lightbox for any [data-ss-zoom] thumbnail (the value is
+	 * the full-size image URL) — used by every "ss-thumb" thumbnail across
+	 * Media Findings and Image Optimizer. One shared implementation rather
+	 * than a per-page copy, and delegated on document (not bound per-image)
+	 * so it keeps working after an AJAX region swap replaces the thumbnails.
+	 */
+	function openZoom( url ) {
+		var overlay = document.createElement( 'div' );
+		overlay.className = 'ss-zoom-overlay';
+		overlay.setAttribute( 'role', 'dialog' );
+		overlay.setAttribute( 'aria-modal', 'true' );
+
+		var img = document.createElement( 'img' );
+		img.className = 'ss-zoom-image';
+		img.src = url;
+		img.alt = '';
+
+		var closeBtn = document.createElement( 'button' );
+		closeBtn.type = 'button';
+		closeBtn.className = 'ss-zoom-close';
+		closeBtn.setAttribute( 'aria-label', StorageSherpa.i18n.close );
+		closeBtn.innerHTML = '&times;';
+
+		overlay.appendChild( img );
+		overlay.appendChild( closeBtn );
+		document.body.appendChild( overlay );
+
+		function close() {
+			overlay.remove();
+			document.removeEventListener( 'keydown', onKeydown );
+		}
+
+		function onKeydown( e ) {
+			if ( 'Escape' === e.key ) {
+				close();
+			}
+		}
+
+		overlay.addEventListener( 'click', function ( e ) {
+			if ( e.target === overlay || e.target === closeBtn ) {
+				close();
+			}
+		} );
+
+		document.addEventListener( 'keydown', onKeydown );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		document.addEventListener( 'click', handleActionClick );
+
+		document.addEventListener( 'click', function ( e ) {
+			var trigger = e.target.closest( '[data-ss-zoom]' );
+			if ( ! trigger ) {
+				return;
+			}
+			// Some thumbnails (the Duplicates compare cards) sit inside a
+			// <label> that toggles a radio input on click — without both of
+			// these the zoom click would also flip that radio's selection.
+			e.preventDefault();
+			e.stopPropagation();
+			openZoom( trigger.getAttribute( 'data-ss-zoom' ) );
+		} );
 		document.addEventListener( 'click', function ( e ) {
 			var scanBtn = e.target.closest( '[data-ss-scan]' );
 			if ( scanBtn ) {

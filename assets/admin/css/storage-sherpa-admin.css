@@ -233,6 +233,60 @@
 	background: #f0f0f1;
 }
 
+img[data-ss-zoom] {
+	cursor: zoom-in;
+}
+
+/**
+ * Click-to-zoom lightbox overlay — created/removed by openZoom() in
+ * storage-sherpa-admin.js. Not scoped under .storage-sherpa-admin like most
+ * of this file since it's appended directly to <body> (which already
+ * carries that class via SS_Admin::body_class(), so the scoping still
+ * holds — this is just written unprefixed for clarity since these class
+ * names are specific enough not to collide with anything else).
+ */
+.ss-zoom-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.85);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 100002;
+	padding: 40px;
+	cursor: zoom-out;
+}
+
+.ss-zoom-image {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+	border-radius: 4px;
+	box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+	cursor: default;
+}
+
+.ss-zoom-close {
+	position: fixed;
+	top: 16px;
+	right: 24px;
+	width: 40px;
+	height: 40px;
+	border: none;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.12);
+	color: #fff;
+	font-size: 26px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.ss-zoom-close:hover,
+.ss-zoom-close:focus {
+	background: rgba(255, 255, 255, 0.25);
+	outline: none;
+}
+
 .ss-filename {
 	display: inline-block;
 	max-width: 160px;

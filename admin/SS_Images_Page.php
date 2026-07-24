@@ -134,8 +134,14 @@ class SS_Images_Page {
 								<td><input type="checkbox" name="ss_ids[]" value="<?php echo (int) $id; ?>" /></td>
 								<td>
 									<?php $thumb = wp_get_attachment_image_src( $id, 'thumbnail' ); ?>
+									<?php $full = wp_get_attachment_image_src( $id, 'full' ); ?>
 									<?php if ( $thumb ) : ?>
-										<img class="ss-thumb" src="<?php echo esc_url( $thumb[0] ); ?>" alt="" />
+										<img
+											class="ss-thumb"
+											src="<?php echo esc_url( $thumb[0] ); ?>"
+											alt=""
+											<?php if ( $full ) : ?>data-ss-zoom="<?php echo esc_url( $full[0] ); ?>"<?php endif; ?>
+										/>
 									<?php endif; ?>
 									<span class="ss-filename" title="<?php echo esc_attr( basename( $row['file_path'] ) ); ?>"><?php echo esc_html( basename( $row['file_path'] ) ); ?></span>
 								</td>

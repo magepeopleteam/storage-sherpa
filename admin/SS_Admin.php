@@ -331,6 +331,7 @@ class SS_Admin {
 					'error'          => __( 'Something went wrong.', 'storage-sherpa' ),
 					'movedToTrash'   => __( 'Moved to Safe Trash.', 'storage-sherpa' ),
 					'undo'           => __( 'Undo', 'storage-sherpa' ),
+					'close'          => __( 'Close', 'storage-sherpa' ),
 				),
 			)
 		);
