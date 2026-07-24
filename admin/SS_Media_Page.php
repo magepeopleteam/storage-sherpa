@@ -143,25 +143,47 @@ class SS_Media_Findings_Table extends WP_List_Table {
 		return isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
 	}
 
+	/**
+	 * The current file-type category filter (images/videos/pdfs/zip/… — see
+	 * SS_Filetype_Analyzer::categories(), plus "unknown") — validated against
+	 * the known category keys so a stray/old value in the URL silently falls
+	 * back to "All types" instead of returning an empty table. Only ever
+	 * exposed as a control on the Orphan Media tab (see
+	 * SS_Media_Page::render()), but honored here for any finding type since
+	 * the underlying query support is generic.
+	 */
+	public function current_file_type_filter() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter, not a state change.
+		$requested = isset( $_GET['file_type'] ) ? sanitize_key( $_GET['file_type'] ) : '';
+		$valid     = array_keys( SS_Filetype_Analyzer::labels() );
+
+		return in_array( $requested, $valid, true ) ? $requested : '';
+	}
+
 	public function prepare_items() {
-		$per_page = 20;
-		$paged    = max( 1, (int) ( $_GET['paged'] ?? 1 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only pagination.
-		$status   = $this->current_status_filter();
-		$search   = $this->current_search();
+		$per_page  = 20;
+		$paged     = max( 1, (int) ( $_GET['paged'] ?? 1 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only pagination.
+		$status    = $this->current_status_filter();
+		$search    = $this->current_search();
+		$file_type = $this->current_file_type_filter();
 
 		$this->_column_headers = array( $this->get_columns(), array(), array() );
 
 		$rows = SS_Media_Findings::query(
 			$this->finding_type,
 			array(
-				'status' => $status,
-				'search' => $search,
-				'limit'  => $per_page,
-				'offset' => ( $paged - 1 ) * $per_page,
+				'status'    => $status,
+				'search'    => $search,
+				'file_type' => $file_type,
+				'limit'     => $per_page,
+				'offset'    => ( $paged - 1 ) * $per_page,
 			)
 		);
 
-		$total = SS_Media_Findings::count_matching( $this->finding_type, array( 'status' => $status, 'search' => $search ) );
+		$total = SS_Media_Findings::count_matching(
+			$this->finding_type,
+			array( 'status' => $status, 'search' => $search, 'file_type' => $file_type )
+		);
 
 		$this->items = $rows;
 		$this->set_pagination_args(
@@ -329,8 +351,9 @@ class SS_Media_Page {
 
 		$table = new SS_Media_Findings_Table( $finding_type );
 		$table->prepare_items();
-		$search        = $table->current_search();
-		$status_filter = $table->current_status_filter();
+		$search           = $table->current_search();
+		$status_filter    = $table->current_status_filter();
+		$file_type_filter = $table->current_file_type_filter();
 		?>
 		<?php SS_Admin::header( __( 'Media Findings', 'storage-sherpa' ) ); ?>
 
@@ -388,6 +411,20 @@ class SS_Media_Page {
 					/>
 					<button type="submit" class="screen-reader-text"><?php esc_html_e( 'Search', 'storage-sherpa' ); ?></button>
 				</form>
+
+				<?php if ( 'orphan' === $active_tab ) : ?>
+					<label class="ss-media-filetype-w" for="ss-media-filetype">
+						<span class="screen-reader-text"><?php esc_html_e( 'Filter by file type', 'storage-sherpa' ); ?></span>
+						<select id="ss-media-filetype" form="ss-media-search-form" name="file_type">
+							<option value=""><?php esc_html_e( 'All file types', 'storage-sherpa' ); ?></option>
+							<?php foreach ( SS_Filetype_Analyzer::labels() as $key => $label ) : ?>
+								<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $file_type_filter, $key ); ?>>
+									<?php echo esc_html( $label ); ?>
+								</option>
+							<?php endforeach; ?>
+						</select>
+					</label>
+				<?php endif; ?>
 			</div>
 
 			<div id="ss-media-selection-bar" class="ss-media-selection-bar" hidden>
@@ -407,6 +444,7 @@ class SS_Media_Page {
 				data-tab="<?php echo esc_attr( $active_tab ); ?>"
 				data-status="<?php echo esc_attr( $status_filter ); ?>"
 				data-search="<?php echo esc_attr( $search ); ?>"
+				data-file-type="<?php echo esc_attr( $file_type_filter ); ?>"
 				data-total-items="<?php echo (int) $table->get_pagination_arg( 'total_items' ); ?>"
 			>
 				<?php $table->views(); ?>

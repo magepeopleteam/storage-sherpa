@@ -32,6 +32,7 @@
 
 	var searchInput      = document.getElementById( 'ss-media-search' );
 	var searchForm       = document.getElementById( 'ss-media-search-form' );
+	var fileTypeSelect   = document.getElementById( 'ss-media-filetype' );
 	var selectionBar     = document.getElementById( 'ss-media-selection-bar' );
 	var selectionText    = document.getElementById( 'ss-media-selection-text' );
 	var selectAllMatchBtn = document.getElementById( 'ss-media-select-all-matching' );
@@ -54,6 +55,10 @@
 
 	function currentStatus() {
 		return region.getAttribute( 'data-status' ) || '';
+	}
+
+	function currentFileType() {
+		return region.getAttribute( 'data-file-type' ) || '';
 	}
 
 	function totalItems() {
@@ -188,6 +193,7 @@
 
 				region.setAttribute( 'data-status', fresh.getAttribute( 'data-status' ) || '' );
 				region.setAttribute( 'data-search', fresh.getAttribute( 'data-search' ) || '' );
+				region.setAttribute( 'data-file-type', fresh.getAttribute( 'data-file-type' ) || '' );
 				region.setAttribute( 'data-total-items', fresh.getAttribute( 'data-total-items' ) || '0' );
 				region.innerHTML = fresh.innerHTML;
 
@@ -212,6 +218,12 @@
 			e.preventDefault();
 			window.clearTimeout( debounceTimer );
 			reloadTableRegion( buildRegionUrl( { s: searchInput.value, paged: '' } ) );
+		} );
+	}
+
+	if ( fileTypeSelect ) {
+		fileTypeSelect.addEventListener( 'change', function () {
+			reloadTableRegion( buildRegionUrl( { file_type: fileTypeSelect.value, paged: '' } ) );
 		} );
 	}
 
@@ -327,7 +339,11 @@
 
 				apiFetch(
 					'/storage-sherpa/v1/media/' + findingType() + '/ids?' +
-						new URLSearchParams( { status: currentStatus(), search: searchInput ? searchInput.value : '' } ).toString()
+						new URLSearchParams( {
+							status: currentStatus(),
+							search: searchInput ? searchInput.value : '',
+							file_type: currentFileType(),
+						} ).toString()
 				).then( function ( res ) {
 					deleteChunked( res.ids, batchId );
 				} );

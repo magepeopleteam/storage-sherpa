@@ -283,15 +283,15 @@ class SS_REST_API {
 	}
 
 	/**
-	 * Every finding id matching the current status/search filter, unpaginated
-	 * — powers the Media Findings screen's "select all N items matching this
-	 * filter" bulk action. The browser then walks this list in small chunks
-	 * against media_trash() rather than the server trashing everything in one
-	 * request, which is what actually keeps a very large selection from
-	 * hitting a request timeout or memory limit. Capped at a generous 20,000
-	 * ids as a sanity limit — a plain id list stays lightweight well past
-	 * that, so the cap exists to bound worst-case response size, not because
-	 * larger sites are expected to hit it.
+	 * Every finding id matching the current status/search/file_type filter,
+	 * unpaginated — powers the Media Findings screen's "select all N items
+	 * matching this filter" bulk action. The browser then walks this list in
+	 * small chunks against media_trash() rather than the server trashing
+	 * everything in one request, which is what actually keeps a very large
+	 * selection from hitting a request timeout or memory limit. Capped at a
+	 * generous 20,000 ids as a sanity limit — a plain id list stays
+	 * lightweight well past that, so the cap exists to bound worst-case
+	 * response size, not because larger sites are expected to hit it.
 	 */
 	public static function media_ids( WP_REST_Request $request ) {
 		$type = $request->get_param( 'type' );
@@ -300,8 +300,9 @@ class SS_REST_API {
 		$ids = SS_Media_Findings::ids(
 			$finding_type,
 			array(
-				'status' => $request->get_param( 'status' ) ?: '',
-				'search' => $request->get_param( 'search' ) ?: '',
+				'status'    => $request->get_param( 'status' ) ?: '',
+				'search'    => $request->get_param( 'search' ) ?: '',
+				'file_type' => $request->get_param( 'file_type' ) ?: '',
 			)
 		);
 

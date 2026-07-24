@@ -88,9 +88,11 @@ class SS_Media_Findings {
 
 	/**
 	 * Shared WHERE-clause builder for query()/ids()/count_matching() — one
-	 * place that knows how `status` and `search` (file name / path, matched
-	 * via LIKE against file_path) translate into SQL, so the three read
-	 * paths can never drift out of sync with each other.
+	 * place that knows how `status`, `search` (file name / path, matched via
+	 * LIKE against file_path), and `file_type` (a SS_Filetype_Analyzer
+	 * category — images/videos/pdfs/zip/etc., matched by extension) each
+	 * translate into SQL, so the three read paths can never drift out of
+	 * sync with each other.
 	 */
 	private static function build_where( $finding_type, $args ) {
 		global $wpdb;
@@ -108,6 +110,31 @@ class SS_Media_Findings {
 			$params[] = '%' . $wpdb->esc_like( $args['search'] ) . '%';
 		}
 
+		if ( ! empty( $args['file_type'] ) && class_exists( 'SS_Filetype_Analyzer' ) ) {
+			$categories = SS_Filetype_Analyzer::categories();
+
+			if ( 'unknown' === $args['file_type'] ) {
+				// No extension in SS_Filetype_Analyzer's known list — build a
+				// NOT LIKE for every one of them instead of trying to name
+				// every "other" extension a plugin might have saved.
+				$clauses = array();
+				foreach ( SS_Filetype_Analyzer::all_extensions() as $ext ) {
+					$clauses[] = 'file_path NOT LIKE %s';
+					$params[]  = '%.' . $wpdb->esc_like( $ext );
+				}
+				if ( $clauses ) {
+					$where[] = 'file_path IS NOT NULL AND (' . implode( ' AND ', $clauses ) . ')';
+				}
+			} elseif ( isset( $categories[ $args['file_type'] ] ) ) {
+				$clauses = array();
+				foreach ( $categories[ $args['file_type'] ] as $ext ) {
+					$clauses[] = 'file_path LIKE %s';
+					$params[]  = '%.' . $wpdb->esc_like( $ext );
+				}
+				$where[] = '(' . implode( ' OR ', $clauses ) . ')';
+			}
+		}
+
 		return array( $where, $params );
 	}
 
@@ -115,11 +142,12 @@ class SS_Media_Findings {
 		global $wpdb;
 
 		$defaults = array(
-			'status'  => '',
-			'search'  => '',
-			'orderby' => 'file_size DESC',
-			'limit'   => 200,
-			'offset'  => 0,
+			'status'    => '',
+			'search'    => '',
+			'file_type' => '',
+			'orderby'   => 'file_size DESC',
+			'limit'     => 200,
+			'offset'    => 0,
 		);
 		$args = wp_parse_args( $args, $defaults );
 
@@ -146,8 +174,9 @@ class SS_Media_Findings {
 		global $wpdb;
 
 		$defaults = array(
-			'status' => '',
-			'search' => '',
+			'status'    => '',
+			'search'    => '',
+			'file_type' => '',
 		);
 		$args = wp_parse_args( $args, $defaults );
 
@@ -166,8 +195,9 @@ class SS_Media_Findings {
 		global $wpdb;
 
 		$defaults = array(
-			'status' => '',
-			'search' => '',
+			'status'    => '',
+			'search'    => '',
+			'file_type' => '',
 		);
 		$args = wp_parse_args( $args, $defaults );
 
