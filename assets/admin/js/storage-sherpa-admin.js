@@ -110,9 +110,51 @@
 		apiFetch( form.getAttribute( 'data-ss-bulk-action' ), {
 			method: 'POST',
 			data: { ids: checked },
-		} ).then( function () {
-			window.location.reload();
+		} ).then( function ( res ) {
+			if ( res && res.batch_id ) {
+				showUndoToast( res.batch_id );
+			} else {
+				window.location.reload();
+			}
 		} );
+	}
+
+	/**
+	 * A bulk trash action creates several Safe Trash rows per item (a post
+	 * row, its postmeta, its base file, every thumbnail size) sharing one
+	 * batch_id — this toast's Undo button restores all of them in one call
+	 * via /trash/restore-batch rather than sending the admin to Recovery
+	 * Center to restore each row by hand. Auto-dismisses (and reloads) after
+	 * 8s if left untouched, same as a typical "action taken" toast pattern.
+	 */
+	function showUndoToast( batchId ) {
+		var toast = document.createElement( 'div' );
+		toast.className = 'ss-toast';
+
+		var text = document.createElement( 'span' );
+		text.textContent = StorageSherpa.i18n.movedToTrash;
+
+		var undoBtn = document.createElement( 'button' );
+		undoBtn.type = 'button';
+		undoBtn.textContent = StorageSherpa.i18n.undo;
+		undoBtn.addEventListener( 'click', function () {
+			window.clearTimeout( dismissTimer );
+			undoBtn.disabled = true;
+			apiFetch( '/storage-sherpa/v1/trash/restore-batch', {
+				method: 'POST',
+				data: { batch_id: batchId },
+			} ).then( function () {
+				window.location.reload();
+			} );
+		} );
+
+		toast.appendChild( text );
+		toast.appendChild( undoBtn );
+		document.body.appendChild( toast );
+
+		var dismissTimer = window.setTimeout( function () {
+			window.location.reload();
+		}, 8000 );
 	}
 
 	function pollScan( startBtn ) {

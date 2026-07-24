@@ -39,6 +39,9 @@ class SS_Background_Process {
 			'broken_media'      => array( 'SS_Broken_Media', 'run_scan' ),
 			'orphan_media'      => array( 'SS_Orphan_Media_Scanner', 'run_scan' ),
 			'duplicate_media'   => array( 'SS_Duplicate_Finder', 'run_scan' ),
+			'unused_sizes'      => array( 'SS_Unused_Sizes_Cleaner', 'run_scan' ),
+			'broken_links'      => array( 'SS_Broken_Links_Scanner', 'run_scan' ),
+			'oversized_images'  => array( 'SS_Oversized_Images', 'run_scan' ),
 		);
 	}
 

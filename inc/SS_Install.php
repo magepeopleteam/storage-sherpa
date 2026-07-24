@@ -24,12 +24,29 @@ class SS_Install {
 		update_option( 'storage_sherpa_db_version', STORAGE_SHERPA_DB_VERSION );
 	}
 
+	/**
+	 * dbDelta() is idempotent/additive (new columns, new tables — never
+	 * destructive), so re-running create_tables() on every version bump is
+	 * safe and is the standard WP upgrade pattern for schema changes that
+	 * ship after a site already activated an older version of the plugin.
+	 */
+	public static function maybe_upgrade() {
+		if ( get_option( 'storage_sherpa_db_version' ) === STORAGE_SHERPA_DB_VERSION ) {
+			return;
+		}
+
+		self::create_tables();
+		self::schedule_events();
+		update_option( 'storage_sherpa_db_version', STORAGE_SHERPA_DB_VERSION );
+	}
+
 	public static function deactivate() {
 		$timestamps = array(
 			'storage_sherpa_daily_event',
 			'storage_sherpa_weekly_event',
 			'storage_sherpa_monthly_event',
 			'storage_sherpa_trash_sweep_event',
+			'storage_sherpa_break_test_sweep_event',
 		);
 
 		foreach ( $timestamps as $hook ) {
@@ -83,8 +100,10 @@ class SS_Install {
 			KEY scope_scanned (scope, scanned_at)
 		) {$charset_collate};";
 
-		// Modules 2, 3, 4, 7 — one shared table for orphan / duplicate /
-		// large-file / broken-media findings, disambiguated by finding_type.
+		// Modules 2, 3, 4, 7, 29, 31 — one shared table for orphan / duplicate /
+		// large-file / broken-media / unused-size / broken-link findings,
+		// disambiguated by finding_type. `confidence` (0-100) backs the
+		// Module 2 "100% safe" vs "possibly used" score.
 		$sql[] = "CREATE TABLE {$prefix}ss_media_findings (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			finding_type VARCHAR(20) NOT NULL,
@@ -94,6 +113,7 @@ class SS_Install {
 			reason VARCHAR(191) NULL,
 			file_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			group_hash VARCHAR(64) NULL,
+			confidence TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			checked_at DATETIME NOT NULL,
 			PRIMARY KEY (id),
 			KEY finding_type (finding_type),
@@ -114,13 +134,15 @@ class SS_Install {
 			table_name VARCHAR(191) NULL,
 			row_data LONGTEXT NULL,
 			size_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			batch_id VARCHAR(32) NULL,
 			deleted_at DATETIME NOT NULL,
 			expires_at DATETIME NOT NULL,
 			restored TINYINT(1) NOT NULL DEFAULT 0,
 			PRIMARY KEY (id),
 			KEY module (module),
 			KEY expires_at (expires_at),
-			KEY restored (restored)
+			KEY restored (restored),
+			KEY batch_id (batch_id)
 		) {$charset_collate};";
 
 		// Module 21 — every cleanup run, across every module, for Reports
@@ -137,6 +159,26 @@ class SS_Install {
 			PRIMARY KEY (id),
 			KEY module (module),
 			KEY created_at (created_at)
+		) {$charset_collate};";
+
+		// Module 28 — Break Test mode. One row per file currently quarantined
+		// and being watched for real requests before it's trashed for good.
+		$sql[] = "CREATE TABLE {$prefix}ss_break_tests (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			attachment_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			trash_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			original_path VARCHAR(500) NOT NULL,
+			original_url_path VARCHAR(500) NOT NULL,
+			token VARCHAR(32) NOT NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'running',
+			hit_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			last_hit_at DATETIME NULL,
+			started_at DATETIME NOT NULL,
+			expires_at DATETIME NOT NULL,
+			resolved_at DATETIME NULL,
+			PRIMARY KEY (id),
+			KEY status (status),
+			KEY token (token)
 		) {$charset_collate};";
 
 		// Module 23 — Ignore Rules.
@@ -167,6 +209,12 @@ class SS_Install {
 
 		if ( ! wp_next_scheduled( 'storage_sherpa_trash_sweep_event' ) ) {
 			wp_schedule_event( time() + ( 2 * HOUR_IN_SECONDS ), 'daily', 'storage_sherpa_trash_sweep_event' );
+		}
+
+		// Hourly rather than daily — a 48-hour Break Test window shouldn't
+		// have to wait up to a full extra day past its expiry to resolve.
+		if ( ! wp_next_scheduled( 'storage_sherpa_break_test_sweep_event' ) ) {
+			wp_schedule_event( time() + ( 10 * MINUTE_IN_SECONDS ), 'hourly', 'storage_sherpa_break_test_sweep_event' );
 		}
 	}
 }

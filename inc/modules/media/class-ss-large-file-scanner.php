@@ -4,7 +4,11 @@
  *
  * Walks wp-content (not just uploads — the spec's extension list includes
  * .sql/.log/.zip/.iso, which live in backups/cache/logs too) looking for
- * files matching the supported extension list, sorted largest first.
+ * files matching the supported extension list, sorted largest first. The
+ * bulk of that list — images, video, audio, PDFs, documents, archives — is
+ * SS_Filetype_Analyzer's canonical category list, so a new extension only
+ * needs adding in one place; .sql and .iso are the two extras this module
+ * needs that don't belong to any File Type Analyzer category.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -14,7 +18,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SS_Large_File_Scanner {
 
 	public static function extensions() {
-		return array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'pdf', 'zip', 'mp4', 'mov', 'iso', 'sql', 'log', 'csv' );
+		return array_values(
+			array_unique(
+				array_merge(
+					SS_Filetype_Analyzer::all_extensions(),
+					array( 'iso', 'sql' )
+				)
+			)
+		);
 	}
 
 	public static function run_scan( $limit = 200, $time_budget = 20 ) {

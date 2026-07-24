@@ -155,6 +155,25 @@ class SS_Notifications {
 	}
 
 	/**
+	 * A Break Test (Module 28) came back with real hits during its watch
+	 * window — the file has already been auto-restored by the time this
+	 * fires, so this is purely "here's what almost got removed", not an
+	 * action the site owner still needs to take.
+	 */
+	public static function notify_break_test_flagged( $test ) {
+		self::send(
+			__( 'Break Test flagged a file as still in use', 'storage-sherpa' ),
+			sprintf(
+				/* translators: 1: file path, 2: number of hits */
+				__( "A Break Test on %1\$s recorded %2\$d hit(s) during its watch window and has been automatically restored — this file is still being requested somewhere.\n\nReview: %3\$s", 'storage-sherpa' ),
+				$test->original_path,
+				(int) $test->hit_count,
+				admin_url( 'admin.php?page=storage-sherpa-media' )
+			)
+		);
+	}
+
+	/**
 	 * Emails a scan summary report — the "Email report" option under
 	 * Module 20 (Scheduled Scans).
 	 */

@@ -38,6 +38,16 @@ class SS_Recovery_Page {
 				?>
 			</p>
 
+			<div class="ss-toolbar">
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<?php wp_nonce_field( 'storage_sherpa_export_trash' ); ?>
+					<input type="hidden" name="action" value="storage_sherpa_export_trash" />
+					<button type="submit" class="button">
+						<?php esc_html_e( 'Download All as ZIP', 'storage-sherpa' ); ?>
+					</button>
+				</form>
+			</div>
+
 			<table class="widefat striped">
 				<thead>
 					<tr>

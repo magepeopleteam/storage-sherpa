@@ -43,6 +43,9 @@ class SS_REST_API {
 			)
 		);
 
+		// --- Module 1: Storage Analyzer (Uploads treemap) --------------------
+		register_rest_route( self::NS, '/uploads/treemap', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'uploads_treemap' ), 'permission_callback' => $perm ) );
+
 		// --- Module 24: Background Scanner ---------------------------------
 		register_rest_route( self::NS, '/scan/start', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'scan_start' ), 'permission_callback' => $perm ) );
 		register_rest_route(
@@ -65,15 +68,15 @@ class SS_REST_API {
 			)
 		);
 
-		// --- Modules 2/3/4/7: Media findings --------------------------------
+		// --- Modules 2/3/4/7/29/30/31: Media findings -------------------------
 		register_rest_route(
 			self::NS,
-			'/media/(?P<type>orphan|duplicate|large|broken)',
+			'/media/(?P<type>orphan|duplicate|large|broken|unused_size|broken_link|oversized)',
 			array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'media_list' ), 'permission_callback' => $perm )
 		);
 		register_rest_route(
 			self::NS,
-			'/media/(?P<type>orphan|duplicate|large|broken)/scan',
+			'/media/(?P<type>orphan|duplicate|large|broken|unused_size|broken_link|oversized)/scan',
 			array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'media_scan' ), 'permission_callback' => $perm )
 		);
 		register_rest_route(
@@ -86,6 +89,19 @@ class SS_REST_API {
 				'args'                => array( 'ids' => array( 'required' => true ) ),
 			)
 		);
+
+		// --- Module 28: Break Test mode --------------------------------------
+		register_rest_route(
+			self::NS,
+			'/break-test/start',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'break_test_start' ),
+				'permission_callback' => $perm,
+				'args'                => array( 'finding_id' => array( 'required' => true ) ),
+			)
+		);
+		register_rest_route( self::NS, '/break-test/list', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'break_test_list' ), 'permission_callback' => $perm ) );
 
 		// --- Module 5: Image Optimization -----------------------------------
 		register_rest_route( self::NS, '/images/scan', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'images_scan' ), 'permission_callback' => $perm ) );
@@ -137,12 +153,16 @@ class SS_REST_API {
 		// --- Module 19: Recovery Center (Safe Trash) --------------------------
 		register_rest_route( self::NS, '/trash', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'trash_list' ), 'permission_callback' => $perm ) );
 		register_rest_route( self::NS, '/trash/(?P<id>\d+)/restore', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'trash_restore' ), 'permission_callback' => $perm ) );
+		register_rest_route( self::NS, '/trash/restore-batch', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'trash_restore_batch' ), 'permission_callback' => $perm, 'args' => array( 'batch_id' => array( 'required' => true ) ) ) );
 		register_rest_route( self::NS, '/trash/(?P<id>\d+)', array( 'methods' => 'DELETE', 'callback' => array( __CLASS__, 'trash_delete' ), 'permission_callback' => $perm ) );
 
 		// --- Module 23: Ignore Rules ---------------------------------------------
 		register_rest_route( self::NS, '/ignore-rules', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'ignore_rules_list' ), 'permission_callback' => $perm ) );
 		register_rest_route( self::NS, '/ignore-rules', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'ignore_rules_add' ), 'permission_callback' => $perm, 'args' => array( 'rule_type' => array( 'required' => true ), 'value' => array( 'required' => true ) ) ) );
 		register_rest_route( self::NS, '/ignore-rules/(?P<id>\d+)', array( 'methods' => 'DELETE', 'callback' => array( __CLASS__, 'ignore_rules_remove' ), 'permission_callback' => $perm ) );
+
+		// --- Module 21: Reports ------------------------------------------------
+		register_rest_route( self::NS, '/reports/summary', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'reports_summary' ), 'permission_callback' => $perm ) );
 
 		// --- Settings (Modules 20/22/23 general settings) -----------------------
 		register_rest_route( self::NS, '/settings', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'settings_get' ), 'permission_callback' => $perm ) );
@@ -180,6 +200,12 @@ class SS_REST_API {
 		);
 	}
 
+	public static function uploads_treemap( WP_REST_Request $request ) {
+		$max_depth = max( 1, min( 3, (int) ( $request->get_param( 'depth' ) ?: 2 ) ) );
+
+		return self::ok( SS_Storage_Analyzer::get_uploads_treemap( $max_depth ) );
+	}
+
 	// ---------------------------------------------------------------------
 	// Background scanner
 	// ---------------------------------------------------------------------
@@ -199,15 +225,18 @@ class SS_REST_API {
 	}
 
 	// ---------------------------------------------------------------------
-	// Media findings (2/3/4/7)
+	// Media findings (2/3/4/7/29/31)
 	// ---------------------------------------------------------------------
 
 	private static function media_type_map() {
 		return array(
-			'orphan'    => array( 'SS_Orphan_Media_Scanner', SS_Media_Findings::TYPE_ORPHAN ),
-			'duplicate' => array( 'SS_Duplicate_Finder', SS_Media_Findings::TYPE_DUPLICATE ),
-			'large'     => array( 'SS_Large_File_Scanner', SS_Media_Findings::TYPE_LARGE ),
-			'broken'    => array( 'SS_Broken_Media', SS_Media_Findings::TYPE_BROKEN ),
+			'orphan'      => array( 'SS_Orphan_Media_Scanner', SS_Media_Findings::TYPE_ORPHAN ),
+			'duplicate'   => array( 'SS_Duplicate_Finder', SS_Media_Findings::TYPE_DUPLICATE ),
+			'large'       => array( 'SS_Large_File_Scanner', SS_Media_Findings::TYPE_LARGE ),
+			'broken'      => array( 'SS_Broken_Media', SS_Media_Findings::TYPE_BROKEN ),
+			'unused_size' => array( 'SS_Unused_Sizes_Cleaner', SS_Media_Findings::TYPE_UNUSED_SIZE ),
+			'broken_link' => array( 'SS_Broken_Links_Scanner', SS_Media_Findings::TYPE_BROKEN_LINK ),
+			'oversized'   => array( 'SS_Oversized_Images', SS_Media_Findings::TYPE_OVERSIZED ),
 		);
 	}
 
@@ -246,8 +275,9 @@ class SS_REST_API {
 	}
 
 	public static function media_trash( WP_REST_Request $request ) {
-		$ids     = array_map( 'intval', (array) $request->get_param( 'ids' ) );
-		$results = array();
+		$ids      = array_map( 'intval', (array) $request->get_param( 'ids' ) );
+		$results  = array();
+		$batch_id = wp_generate_password( 20, false, false );
 
 		foreach ( $ids as $finding_id ) {
 			$finding = SS_Media_Findings::get( $finding_id );
@@ -255,10 +285,21 @@ class SS_REST_API {
 				continue;
 			}
 
-			if ( $finding->attachment_id ) {
-				$result = SS_Trash::trash_attachment( $finding->attachment_id, 'media_findings' );
+			// unused_size findings share their parent's attachment_id, but
+			// must never go through trash_attachment() (that deletes the
+			// whole attachment) — checked first, ahead of the generic
+			// attachment_id branch below, for exactly that reason.
+			if ( SS_Media_Findings::TYPE_UNUSED_SIZE === $finding->finding_type ) {
+				$result = SS_Unused_Sizes_Cleaner::trash_size_finding( $finding, $batch_id );
+			} elseif ( SS_Media_Findings::TYPE_BROKEN_LINK === $finding->finding_type ) {
+				// Nothing on disk to preserve — the referenced file is
+				// already gone. "Trashing" this finding just acknowledges
+				// and clears it.
+				$result = true;
+			} elseif ( $finding->attachment_id ) {
+				$result = SS_Trash::trash_attachment( $finding->attachment_id, 'media_findings', $batch_id );
 			} elseif ( $finding->file_path ) {
-				$result = SS_Trash::trash_file( $finding->file_path, 'media_findings' );
+				$result = SS_Trash::trash_file( $finding->file_path, 'media_findings', '', $batch_id );
 			} else {
 				continue;
 			}
@@ -270,7 +311,57 @@ class SS_REST_API {
 			$results[ $finding_id ] = is_wp_error( $result ) ? $result->get_error_message() : true;
 		}
 
-		return self::ok( array( 'results' => $results ) );
+		return self::ok(
+			array(
+				'results'  => $results,
+				'batch_id' => $batch_id,
+			)
+		);
+	}
+
+	public static function trash_restore_batch( WP_REST_Request $request ) {
+		$result = SS_Trash::restore_batch( $request->get_param( 'batch_id' ) );
+		return self::maybe_error( $result ) ?? self::ok( $result );
+	}
+
+	// ---------------------------------------------------------------------
+	// Break Test mode (28)
+	// ---------------------------------------------------------------------
+
+	public static function break_test_start( WP_REST_Request $request ) {
+		$finding = SS_Media_Findings::get( (int) $request->get_param( 'finding_id' ) );
+
+		if ( ! $finding || ! $finding->file_path ) {
+			return new WP_REST_Response( array( 'message' => __( 'This finding has no file to test.', 'storage-sherpa' ) ), 400 );
+		}
+
+		// unused_size findings need the metadata-patching trash path
+		// (SS_Unused_Sizes_Cleaner::trash_size_finding()), not a plain file
+		// quarantine — starting a generic break test here would leave the
+		// attachment's size metadata pointing at a now-moved file. Broken
+		// links have no real file at all.
+		if ( in_array( $finding->finding_type, array( SS_Media_Findings::TYPE_UNUSED_SIZE, SS_Media_Findings::TYPE_BROKEN_LINK ), true ) ) {
+			return new WP_REST_Response( array( 'message' => __( 'Break Test is not available for this finding type.', 'storage-sherpa' ) ), 400 );
+		}
+
+		$result = SS_Break_Test::start( $finding->file_path, $finding->attachment_id );
+
+		if ( is_wp_error( $result ) ) {
+			return new WP_REST_Response( array( 'message' => $result->get_error_message() ), 400 );
+		}
+
+		SS_Media_Findings::delete( $finding->id );
+
+		return self::ok( array( 'break_test_id' => $result ) );
+	}
+
+	public static function break_test_list() {
+		return self::ok(
+			array(
+				'running' => SS_Break_Test::list_running(),
+				'recent'  => SS_Break_Test::list_recent(),
+			)
+		);
 	}
 
 	// ---------------------------------------------------------------------
@@ -512,6 +603,14 @@ class SS_REST_API {
 	}
 
 	// ---------------------------------------------------------------------
+	// Reports (21)
+	// ---------------------------------------------------------------------
+
+	public static function reports_summary() {
+		return self::ok( SS_Reports::summary() );
+	}
+
+	// ---------------------------------------------------------------------
 	// Settings
 	// ---------------------------------------------------------------------
 
@@ -542,6 +641,8 @@ class SS_REST_API {
 		$settings['notify_growth_percent'] = max( 1, (float) $settings['notify_growth_percent'] );
 		$settings['notify_min_orphans']    = max( 0, (int) $settings['notify_min_orphans'] );
 		$settings['notify_min_log_mb']     = max( 1, (int) $settings['notify_min_log_mb'] );
+		$settings['orphan_min_confidence'] = max( 0, min( 100, (int) $settings['orphan_min_confidence'] ) );
+		$settings['orphan_min_age_days']   = max( 0, (int) $settings['orphan_min_age_days'] );
 
 		update_option( 'storage_sherpa_settings', $settings );
 

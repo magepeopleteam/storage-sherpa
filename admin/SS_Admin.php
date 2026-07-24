@@ -51,6 +51,7 @@ class SS_Admin {
 			'storage-sherpa-autoload' => array( __( 'Autoload Options', 'storage-sherpa' ), array( 'SS_Autoload_Page', 'render' ) ),
 			'storage-sherpa-filetypes' => array( __( 'File Types', 'storage-sherpa' ), array( 'SS_Filetypes_Page', 'render' ) ),
 			'storage-sherpa-recovery' => array( __( 'Recovery Center', 'storage-sherpa' ), array( 'SS_Recovery_Page', 'render' ) ),
+			'storage-sherpa-reports' => array( __( 'Reports', 'storage-sherpa' ), array( 'SS_Reports_Page', 'render' ) ),
 			'storage-sherpa-settings' => array( __( 'Settings', 'storage-sherpa' ), array( 'SS_Settings_Page', 'render' ) ),
 		);
 
@@ -107,6 +108,30 @@ class SS_Admin {
 			wp_enqueue_style( 'wp-components' );
 		}
 
+		if ( 'storage-sherpa-scan' === $plugin_page ) {
+			wp_enqueue_script(
+				'storage-sherpa-treemap',
+				STORAGE_SHERPA_PLUGIN_URL . '/assets/admin/js/storage-sherpa-treemap.js',
+				array( 'wp-api-fetch', 'storage-sherpa-admin' ),
+				STORAGE_SHERPA_PLUGIN_VERSION,
+				true
+			);
+
+			wp_localize_script(
+				'storage-sherpa-treemap',
+				'StorageSherpaTreemap',
+				array(
+					'i18n' => array(
+						'file'  => __( 'file', 'storage-sherpa' ),
+						'files' => __( 'files', 'storage-sherpa' ),
+						'other' => __( 'Other', 'storage-sherpa' ),
+						'empty' => __( 'No data yet — run a scan.', 'storage-sherpa' ),
+						'error' => __( 'Could not load the treemap.', 'storage-sherpa' ),
+					),
+				)
+			);
+		}
+
 		wp_localize_script(
 			'storage-sherpa-admin',
 			'StorageSherpa',
@@ -121,6 +146,8 @@ class SS_Admin {
 					'working'        => __( 'Working…', 'storage-sherpa' ),
 					'done'           => __( 'Done.', 'storage-sherpa' ),
 					'error'          => __( 'Something went wrong.', 'storage-sherpa' ),
+					'movedToTrash'   => __( 'Moved to Safe Trash.', 'storage-sherpa' ),
+					'undo'           => __( 'Undo', 'storage-sherpa' ),
 				),
 			)
 		);

@@ -52,10 +52,12 @@ class SS_Settings_Page {
 						<td>
 							<?php
 							$auto_options = array(
-								'database'     => __( 'Database Cleanup categories', 'storage-sherpa' ),
-								'empty_folders' => __( 'Empty Folders', 'storage-sherpa' ),
-								'logs'         => __( 'Log files', 'storage-sherpa' ),
-								'trash_sweep'  => __( 'Sweep expired Safe Trash immediately', 'storage-sherpa' ),
+								'database'            => __( 'Database Cleanup categories', 'storage-sherpa' ),
+								'empty_folders'       => __( 'Empty Folders', 'storage-sherpa' ),
+								'logs'                => __( 'Log files', 'storage-sherpa' ),
+								'trash_sweep'         => __( 'Sweep expired Safe Trash immediately', 'storage-sherpa' ),
+								'orphan_media'        => __( 'Orphan media (gated by confidence + age below)', 'storage-sherpa' ),
+								'post_delete_cleanup' => __( 'Orphans left behind by a permanently deleted post', 'storage-sherpa' ),
 							);
 							foreach ( $auto_options as $key => $label ) :
 								?>
@@ -65,6 +67,19 @@ class SS_Settings_Page {
 								</label>
 							<?php endforeach; ?>
 							<p class="description"><?php esc_html_e( 'Nothing runs automatically unless checked here — every category is still routed through Safe Trash either way.', 'storage-sherpa' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="ss-orphan-min-confidence"><?php esc_html_e( 'Orphan auto-clean: minimum confidence', 'storage-sherpa' ); ?></label></th>
+						<td>
+							<input type="number" min="0" max="100" id="ss-orphan-min-confidence" value="<?php echo esc_attr( $settings['orphan_min_confidence'] ); ?>" /> %
+							<p class="description"><?php esc_html_e( 'Only auto-clean orphans at or above this "safe to delete" confidence score.', 'storage-sherpa' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="ss-orphan-min-age"><?php esc_html_e( 'Orphan auto-clean: minimum age', 'storage-sherpa' ); ?></label></th>
+						<td>
+							<input type="number" min="0" id="ss-orphan-min-age" value="<?php echo esc_attr( $settings['orphan_min_age_days'] ); ?>" /> <?php esc_html_e( 'days since upload', 'storage-sherpa' ); ?>
 						</td>
 					</tr>
 				</table>
@@ -163,6 +178,8 @@ class SS_Settings_Page {
 					notify_growth_percent: parseFloat(document.getElementById('ss-notify-growth').value),
 					notify_min_orphans: parseInt(document.getElementById('ss-notify-orphans').value, 10),
 					notify_min_log_mb: parseInt(document.getElementById('ss-notify-logs').value, 10),
+					orphan_min_confidence: parseInt(document.getElementById('ss-orphan-min-confidence').value, 10),
+					orphan_min_age_days: parseInt(document.getElementById('ss-orphan-min-age').value, 10),
 				},
 			}).then(function () {
 				statusEl.textContent = StorageSherpa.i18n.done;

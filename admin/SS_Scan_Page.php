@@ -79,6 +79,35 @@ class SS_Scan_Page {
 			</div>
 
 			<div class="ss-section">
+				<h2><?php esc_html_e( 'Folder-Size Treemap (Uploads)', 'storage-sherpa' ); ?></h2>
+				<p class="ss-muted"><?php esc_html_e( 'Tile area is proportional to folder size. Hover or focus a tile for details.', 'storage-sherpa' ); ?></p>
+				<ul id="ss-treemap-legend" class="ss-legend ss-treemap-legend"></ul>
+				<div
+					id="ss-treemap-root"
+					class="ss-treemap-root"
+					role="img"
+					aria-label="<?php esc_attr_e( 'Uploads folder size treemap', 'storage-sherpa' ); ?>"
+				>
+					<p class="ss-muted ss-treemap-loading"><?php esc_html_e( 'Loading treemap…', 'storage-sherpa' ); ?></p>
+				</div>
+				<details class="ss-treemap-table-toggle">
+					<summary><?php esc_html_e( 'View as table', 'storage-sherpa' ); ?></summary>
+					<table class="widefat striped" id="ss-treemap-table">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Folder', 'storage-sherpa' ); ?></th>
+								<th><?php esc_html_e( 'Files', 'storage-sherpa' ); ?></th>
+								<th><?php esc_html_e( 'Size', 'storage-sherpa' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr><td colspan="3"><?php esc_html_e( 'Loading…', 'storage-sherpa' ); ?></td></tr>
+						</tbody>
+					</table>
+				</details>
+			</div>
+
+			<div class="ss-section">
 				<h2><?php esc_html_e( 'Storage by File Type', 'storage-sherpa' ); ?></h2>
 				<p class="ss-muted"><?php esc_html_e( 'Click "Scan File Types" above to refresh this table.', 'storage-sherpa' ); ?></p>
 				<table class="widefat striped">

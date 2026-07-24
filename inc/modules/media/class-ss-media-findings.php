@@ -13,14 +13,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class SS_Media_Findings {
 
-	const TYPE_ORPHAN    = 'orphan';
-	const TYPE_DUPLICATE = 'duplicate';
-	const TYPE_LARGE     = 'large';
-	const TYPE_BROKEN    = 'broken';
+	const TYPE_ORPHAN       = 'orphan';
+	const TYPE_DUPLICATE    = 'duplicate';
+	const TYPE_LARGE        = 'large';
+	const TYPE_BROKEN       = 'broken';
+	const TYPE_UNUSED_SIZE  = 'unused_size';
+	const TYPE_BROKEN_LINK  = 'broken_link';
+	const TYPE_OVERSIZED    = 'oversized';
 
 	/**
 	 * Replaces all stored findings of a given type with a fresh scan result.
-	 * Each $row: attachment_id, file_path, status, reason, file_size, group_hash (optional).
+	 * Each $row: attachment_id, file_path, status, reason, file_size,
+	 * group_hash (optional), confidence (optional, 0-100).
 	 */
 	public static function replace_all( $finding_type, array $rows ) {
 		global $wpdb;
@@ -41,13 +45,45 @@ class SS_Media_Findings {
 					'reason'        => isset( $row['reason'] ) ? $row['reason'] : null,
 					'file_size'     => isset( $row['file_size'] ) ? (int) $row['file_size'] : 0,
 					'group_hash'    => isset( $row['group_hash'] ) ? $row['group_hash'] : null,
+					'confidence'    => isset( $row['confidence'] ) ? (int) $row['confidence'] : 0,
 					'checked_at'    => $now,
 				),
-				array( '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%s' )
+				array( '%s', '%d', '%s', '%s', '%s', '%d', '%s', '%d', '%s' )
 			);
 		}
 
 		return count( $rows );
+	}
+
+	/**
+	 * A 0-100 confidence score's human label — "100% safe" reads very
+	 * differently to a site owner than "possibly used", which is the whole
+	 * point of exposing a score instead of a binary used/orphan verdict.
+	 */
+	public static function confidence_label( $confidence ) {
+		$confidence = (int) $confidence;
+
+		if ( $confidence >= 95 ) {
+			return __( '100% safe to delete', 'storage-sherpa' );
+		}
+
+		if ( $confidence >= 70 ) {
+			return sprintf(
+				/* translators: %d: confidence percentage */
+				__( '%d%% confident — likely used', 'storage-sherpa' ),
+				$confidence
+			);
+		}
+
+		if ( $confidence > 0 ) {
+			return sprintf(
+				/* translators: %d: confidence percentage */
+				__( '%d%% confident — possibly used', 'storage-sherpa' ),
+				$confidence
+			);
+		}
+
+		return __( 'No usage detected', 'storage-sherpa' );
 	}
 
 	public static function query( $finding_type, $args = array() ) {

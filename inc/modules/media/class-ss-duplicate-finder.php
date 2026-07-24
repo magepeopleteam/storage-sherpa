@@ -7,6 +7,11 @@
  * every attachment on large libraries. SHA-256 by default (MD5 is offered
  * as a faster/legacy option via the same method, both collision-safe enough
  * for "is this file byte-identical" purposes).
+ *
+ * Filters candidates by file extension against SS_Filetype_Analyzer's
+ * canonical list (via SS_Large_File_Scanner::extensions()) rather than
+ * post_mime_type — covers every non-image type those modules already know
+ * about (PDFs, video, audio, documents, archives), not just images.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -32,14 +37,20 @@ class SS_Duplicate_Finder {
 			 FROM {$wpdb->posts} p
 			 INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = '_wp_attached_file'
 			 WHERE p.post_type = 'attachment'
-			 AND p.post_mime_type IN ('image/jpeg','image/png','image/gif','image/webp','image/avif','application/pdf')
 			 ORDER BY p.ID ASC"
 		); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 
-		$upload_dir = wp_upload_dir();
-		$by_size    = array();
+		$allowed_extensions = SS_Large_File_Scanner::extensions();
+		$upload_dir         = wp_upload_dir();
+		$by_size            = array();
 
 		foreach ( $attachments as $row ) {
+			$ext = strtolower( pathinfo( $row->relative_path, PATHINFO_EXTENSION ) );
+
+			if ( ! in_array( $ext, $allowed_extensions, true ) ) {
+				continue;
+			}
+
 			$path = trailingslashit( $upload_dir['basedir'] ) . $row->relative_path;
 
 			if ( ! file_exists( $path ) || storage_sherpa_is_ignored_path( $path ) ) {

@@ -44,6 +44,9 @@ class SS_Media_Findings_Table extends WP_List_Table {
 			'duplicate'     => __( 'Duplicate', 'storage-sherpa' ),
 			'large'         => __( 'Large', 'storage-sherpa' ),
 			'broken'        => __( 'Broken', 'storage-sherpa' ),
+			'unused_size'   => __( 'Unused Size', 'storage-sherpa' ),
+			'broken_link'   => __( 'Broken Link', 'storage-sherpa' ),
+			'oversized'     => __( 'Oversized', 'storage-sherpa' ),
 		);
 	}
 
@@ -61,13 +64,22 @@ class SS_Media_Findings_Table extends WP_List_Table {
 	}
 
 	public function get_columns() {
-		return array(
+		$columns = array(
 			'cb'     => '<input type="checkbox" data-ss-select-all />',
 			'file'   => __( 'File', 'storage-sherpa' ),
 			'status' => __( 'Status', 'storage-sherpa' ),
 			'reason' => __( 'Reason', 'storage-sherpa' ),
 			'size'   => __( 'Size', 'storage-sherpa' ),
 		);
+
+		// Confidence only means anything for orphan findings — every other
+		// finding type leaves the column at its default 0 and would just
+		// show a meaningless "0%" here.
+		if ( SS_Media_Findings::TYPE_ORPHAN === $this->finding_type ) {
+			$columns['confidence'] = __( 'Confidence', 'storage-sherpa' );
+		}
+
+		return $columns;
 	}
 
 	/**
@@ -157,7 +169,25 @@ class SS_Media_Findings_Table extends WP_List_Table {
 			}
 		}
 
-		return $img . esc_html( $name );
+		return $img . esc_html( $name ) . $this->break_test_button( $item );
+	}
+
+	/**
+	 * Not offered for unused_size (needs the metadata-patching trash path,
+	 * not a plain file quarantine — see SS_REST_API::break_test_start()) or
+	 * broken_link (there's no real file left to quarantine).
+	 */
+	private function break_test_button( $item ) {
+		if ( ! $item->file_path || in_array( $this->finding_type, array( SS_Media_Findings::TYPE_UNUSED_SIZE, SS_Media_Findings::TYPE_BROKEN_LINK ), true ) ) {
+			return '';
+		}
+
+		return sprintf(
+			' <button type="button" class="button button-small" data-ss-action="/storage-sherpa/v1/break-test/start" data-ss-body=\'%s\' data-ss-confirm="%s">%s</button>',
+			esc_attr( wp_json_encode( array( 'finding_id' => (int) $item->id ) ) ),
+			esc_attr__( 'Quarantine this file and watch for real traffic for 48 hours before treating it as confirmed safe?', 'storage-sherpa' ),
+			esc_html__( 'Break Test', 'storage-sherpa' )
+		);
 	}
 
 	public function column_status( $item ) {
@@ -166,6 +196,22 @@ class SS_Media_Findings_Table extends WP_List_Table {
 
 	public function column_reason( $item ) {
 		return esc_html( $item->reason );
+	}
+
+	/**
+	 * "100% safe to delete" reads very differently than a bare orphan/used
+	 * verdict — see SS_Media_Findings::confidence_label() and
+	 * SS_Orphan_Media_Scanner::safe_to_delete_confidence() for how the
+	 * score is derived. Badge colors deliberately mirror the Status
+	 * column's existing convention (red = "unused"/safe to clean up,
+	 * green = "used"/leave it alone) rather than inventing a new color
+	 * language, so the two columns never visually disagree on the same row.
+	 */
+	public function column_confidence( $item ) {
+		$confidence = isset( $item->confidence ) ? (int) $item->confidence : 0;
+		$class      = $confidence >= 95 ? 'ss-badge-unused' : ( $confidence >= 70 ? 'ss-badge-possibly_used' : 'ss-badge-used' );
+
+		return '<span class="ss-badge ' . esc_attr( $class ) . '">' . esc_html( SS_Media_Findings::confidence_label( $confidence ) ) . '</span>';
 	}
 
 	public function column_size( $item ) {
@@ -177,10 +223,13 @@ class SS_Media_Page {
 
 	private static function tabs() {
 		return array(
-			'orphan'    => array( __( 'Orphan Media', 'storage-sherpa' ), SS_Media_Findings::TYPE_ORPHAN ),
-			'duplicate' => array( __( 'Duplicates', 'storage-sherpa' ), SS_Media_Findings::TYPE_DUPLICATE ),
-			'large'     => array( __( 'Large Files', 'storage-sherpa' ), SS_Media_Findings::TYPE_LARGE ),
-			'broken'    => array( __( 'Broken Media', 'storage-sherpa' ), SS_Media_Findings::TYPE_BROKEN ),
+			'orphan'      => array( __( 'Orphan Media', 'storage-sherpa' ), SS_Media_Findings::TYPE_ORPHAN ),
+			'duplicate'   => array( __( 'Duplicates', 'storage-sherpa' ), SS_Media_Findings::TYPE_DUPLICATE ),
+			'large'       => array( __( 'Large Files', 'storage-sherpa' ), SS_Media_Findings::TYPE_LARGE ),
+			'broken'      => array( __( 'Broken Media', 'storage-sherpa' ), SS_Media_Findings::TYPE_BROKEN ),
+			'unused_size' => array( __( 'Unused Sizes', 'storage-sherpa' ), SS_Media_Findings::TYPE_UNUSED_SIZE ),
+			'broken_link' => array( __( 'Broken Links', 'storage-sherpa' ), SS_Media_Findings::TYPE_BROKEN_LINK ),
+			'oversized'   => array( __( 'Oversized Images', 'storage-sherpa' ), SS_Media_Findings::TYPE_OVERSIZED ),
 		);
 	}
 
@@ -210,6 +259,30 @@ class SS_Media_Page {
 
 			<?php $table->views(); ?>
 
+			<?php if ( 'orphan' === $active_tab ) : ?>
+				<?php
+					$integrations = SS_Orphan_Media_Scanner::active_integrations();
+					$detected     = __( 'detected, files checked', 'storage-sherpa' );
+					$not_detected = __( 'not detected', 'storage-sherpa' );
+				?>
+				<p class="ss-muted ss-integrations-note">
+					<?php esc_html_e( 'Downloadable-file protection —', 'storage-sherpa' ); ?>
+					<?php
+					echo esc_html(
+						/* translators: %s: "detected, files checked" or "not detected" */
+						sprintf( __( 'WooCommerce: %s', 'storage-sherpa' ), $integrations['woocommerce'] ? $detected : $not_detected )
+					);
+					?>
+					&middot;
+					<?php
+					echo esc_html(
+						/* translators: %s: "detected, files checked" or "not detected" */
+						sprintf( __( 'Easy Digital Downloads: %s', 'storage-sherpa' ), $integrations['edd'] ? $detected : $not_detected )
+					);
+					?>
+				</p>
+			<?php endif; ?>
+
 			<div class="ss-toolbar">
 				<button class="button button-primary" data-ss-action="/storage-sherpa/v1/media/<?php echo esc_attr( $active_tab ); ?>/scan">
 					<?php esc_html_e( 'Scan Now', 'storage-sherpa' ); ?>
@@ -229,6 +302,41 @@ class SS_Media_Page {
 				</div>
 				<?php $table->display(); ?>
 			</form>
+
+			<?php if ( class_exists( 'SS_Break_Test' ) ) : ?>
+				<?php $running_tests = SS_Break_Test::list_running(); ?>
+				<?php if ( ! empty( $running_tests ) ) : ?>
+					<div class="ss-section">
+						<h2><?php esc_html_e( 'Break Tests in Progress', 'storage-sherpa' ); ?></h2>
+						<p class="ss-muted"><?php esc_html_e( 'Files currently quarantined and being watched for real traffic before they\'re treated as confirmed safe.', 'storage-sherpa' ); ?></p>
+						<table class="widefat striped">
+							<thead>
+								<tr>
+									<th><?php esc_html_e( 'File', 'storage-sherpa' ); ?></th>
+									<th><?php esc_html_e( 'Started', 'storage-sherpa' ); ?></th>
+									<th><?php esc_html_e( 'Watching Until', 'storage-sherpa' ); ?></th>
+									<th><?php esc_html_e( 'Hits So Far', 'storage-sherpa' ); ?></th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $running_tests as $test ) : ?>
+									<tr>
+										<td><?php echo esc_html( basename( $test->original_path ) ); ?></td>
+										<td><?php echo esc_html( $test->started_at ); ?></td>
+										<td><?php echo esc_html( $test->expires_at ); ?></td>
+										<td>
+											<?php echo esc_html( number_format_i18n( $test->hit_count ) ); ?>
+											<?php if ( $test->hit_count > 0 ) : ?>
+												<span class="ss-badge ss-badge-broken"><?php esc_html_e( 'In use — will auto-restore', 'storage-sherpa' ); ?></span>
+											<?php endif; ?>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+				<?php endif; ?>
+			<?php endif; ?>
 		</div>
 		<?php
 	}

@@ -9,6 +9,11 @@
  * reconnect it to a same-named file found elsewhere in uploads, or let the
  * admin upload a replacement (handled by the admin screen's normal media
  * uploader, then reconnect() re-points the existing attachment at it).
+ *
+ * A missing local file is exactly what a cloud-offload plugin (WP Offload
+ * Media, Media Cloud, etc.) is *supposed* to produce once it removes the
+ * local copy after upload — storage_sherpa_attachment_is_offloaded() skips
+ * those so this module doesn't flag every offloaded attachment as broken.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -46,6 +51,10 @@ class SS_Broken_Media {
 
 			// External/remote-only attachments (no local file ever expected) are skipped.
 			if ( preg_match( '#^https?://#i', $row->relative_path ) ) {
+				continue;
+			}
+
+			if ( storage_sherpa_attachment_is_offloaded( $row->ID ) ) {
 				continue;
 			}
 

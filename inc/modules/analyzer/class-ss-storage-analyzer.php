@@ -321,6 +321,136 @@ class SS_Storage_Analyzer {
 	}
 
 	/**
+	 * Recursive folder-size tree for the Uploads directory, capped by depth,
+	 * per-level child count, and wall time — powers the Storage Analyzer's
+	 * treemap. A folder's direct files are rolled into a synthetic "Files"
+	 * leaf and everything past the per-level cap into "Other folders", so
+	 * every tile in the treemap is still backed by a real, accounted-for size.
+	 */
+	public static function get_uploads_treemap( $max_depth = 2, $max_children = 12, $max_seconds = 15 ) {
+		$dir  = wp_upload_dir();
+		$base = $dir['basedir'];
+
+		$max_depth = max( 1, min( 3, (int) $max_depth ) );
+
+		return self::build_treemap_node( $base, basename( $base ), 0, $max_depth, $max_children, microtime( true ), $max_seconds );
+	}
+
+	private static function build_treemap_node( $path, $label, $depth, $max_depth, $max_children, $start, $max_seconds ) {
+		$node = array(
+			'name'     => $label,
+			'path'     => $path,
+			'kind'     => 0 === $depth ? 'root' : 'folder',
+			'size'     => 0,
+			'files'    => 0,
+			'children' => array(),
+		);
+
+		if ( ! is_dir( $path ) ) {
+			return $node;
+		}
+
+		$entries = @scandir( $path );
+		if ( false === $entries ) {
+			return $node;
+		}
+
+		$own_files_size  = 0;
+		$own_files_count = 0;
+		$subdirs         = array();
+
+		foreach ( $entries as $entry ) {
+			if ( '.' === $entry || '..' === $entry ) {
+				continue;
+			}
+
+			$child_path = $path . DIRECTORY_SEPARATOR . $entry;
+
+			if ( storage_sherpa_is_ignored_path( $child_path ) ) {
+				continue;
+			}
+
+			if ( is_dir( $child_path ) ) {
+				$subdirs[] = array( 'path' => $child_path, 'label' => $entry );
+			} elseif ( is_file( $child_path ) ) {
+				$own_files_size += (int) @filesize( $child_path );
+				++$own_files_count;
+			}
+		}
+
+		$scored = array();
+
+		foreach ( $subdirs as $sub ) {
+			if ( ( microtime( true ) - $start ) > $max_seconds ) {
+				break;
+			}
+
+			$remaining = max( 1, $max_seconds - ( microtime( true ) - $start ) );
+			$stats     = storage_sherpa_dir_stats( $sub['path'], $remaining );
+
+			$scored[] = array(
+				'path'  => $sub['path'],
+				'label' => $sub['label'],
+				'size'  => $stats['size'],
+				'files' => $stats['files'],
+			);
+		}
+
+		usort( $scored, fn( $a, $b ) => $b['size'] <=> $a['size'] );
+
+		$top  = array_slice( $scored, 0, $max_children );
+		$rest = array_slice( $scored, $max_children );
+
+		$children = array();
+
+		foreach ( $top as $child ) {
+			if ( $depth + 1 < $max_depth && ( microtime( true ) - $start ) <= $max_seconds ) {
+				$sub_node          = self::build_treemap_node( $child['path'], $child['label'], $depth + 1, $max_depth, $max_children, $start, $max_seconds );
+				$sub_node['size']  = $child['size'];
+				$sub_node['files'] = $child['files'];
+				$children[]        = $sub_node;
+			} else {
+				$children[] = array(
+					'name'     => $child['label'],
+					'path'     => $child['path'],
+					'kind'     => 'folder',
+					'size'     => $child['size'],
+					'files'    => $child['files'],
+					'children' => array(),
+				);
+			}
+		}
+
+		if ( ! empty( $rest ) ) {
+			$children[] = array(
+				'name'     => __( 'Other folders', 'storage-sherpa' ),
+				'path'     => null,
+				'kind'     => 'other',
+				'size'     => array_sum( wp_list_pluck( $rest, 'size' ) ),
+				'files'    => array_sum( wp_list_pluck( $rest, 'files' ) ),
+				'children' => array(),
+			);
+		}
+
+		if ( $own_files_size > 0 ) {
+			$children[] = array(
+				'name'     => __( 'Files', 'storage-sherpa' ),
+				'path'     => null,
+				'kind'     => 'files',
+				'size'     => $own_files_size,
+				'files'    => $own_files_count,
+				'children' => array(),
+			);
+		}
+
+		$node['children'] = $children;
+		$node['size']     = array_sum( wp_list_pluck( $children, 'size' ) );
+		$node['files']    = array_sum( wp_list_pluck( $children, 'files' ) );
+
+		return $node;
+	}
+
+	/**
 	 * A simple, documented heuristic (0-100): starts at 100 and subtracts
 	 * penalty points for signals that correlate with "this install could use
 	 * a cleanup" — not a scientific score, a directional indicator.

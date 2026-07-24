@@ -119,6 +119,51 @@ class SS_Cron {
 		if ( in_array( 'trash_sweep', $enabled, true ) ) {
 			SS_Trash::sweep_expired();
 		}
+
+		if ( in_array( 'orphan_media', $enabled, true ) && class_exists( 'SS_Orphan_Media_Scanner' ) ) {
+			self::auto_clean_orphan_media( $settings );
+		}
+	}
+
+	/**
+	 * The one auto-clean category with real false-positive risk, so it's
+	 * gated by two settings on top of the usual opt-in checkbox: a minimum
+	 * "safe to delete" confidence (SS_Orphan_Media_Scanner) and a minimum
+	 * upload age. Only ever moves matching attachments to Safe Trash — never
+	 * a hard delete, same guarantee as every other cleanup path.
+	 */
+	private static function auto_clean_orphan_media( $settings ) {
+		$min_confidence = (int) $settings['orphan_min_confidence'];
+		$min_age_days   = (int) $settings['orphan_min_age_days'];
+
+		$rows = SS_Media_Findings::query(
+			SS_Media_Findings::TYPE_ORPHAN,
+			array(
+				'status' => 'unused',
+				'limit'  => 500,
+			)
+		);
+
+		$batch_id = wp_generate_password( 20, false, false );
+
+		foreach ( $rows as $row ) {
+			if ( ! $row->attachment_id || (int) $row->confidence < $min_confidence ) {
+				continue;
+			}
+
+			$uploaded = get_post_field( 'post_date', $row->attachment_id );
+			$age_days = $uploaded ? ( time() - strtotime( $uploaded ) ) / DAY_IN_SECONDS : 0;
+
+			if ( $age_days < $min_age_days ) {
+				continue;
+			}
+
+			$result = SS_Trash::trash_attachment( $row->attachment_id, 'auto_cleanup', $batch_id );
+
+			if ( ! is_wp_error( $result ) ) {
+				SS_Media_Findings::delete( $row->id );
+			}
+		}
 	}
 
 	public static function run_trash_sweep() {

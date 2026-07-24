@@ -189,7 +189,10 @@
 }
 
 .ss-badge-broken,
-.ss-badge-large {
+.ss-badge-large,
+.ss-badge-unused_size,
+.ss-badge-broken_link,
+.ss-badge-oversized {
 	background: #f0f0f1;
 	color: #50575e;
 }
@@ -230,6 +233,139 @@
 	background: #f0f0f1;
 }
 
+.ss-treemap-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 16px;
+	margin-bottom: 10px;
+}
+
+.ss-treemap-root {
+	position: relative;
+	width: 100%;
+	height: 420px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.ss-treemap-loading {
+	padding: 16px;
+}
+
+.ss-treemap-tile {
+	position: absolute;
+	box-sizing: border-box;
+	border: 1px solid #fff;
+	padding: 4px 6px;
+	overflow: hidden;
+	font-size: 11px;
+	line-height: 1.35;
+}
+
+.ss-treemap-tile:hover,
+.ss-treemap-tile:focus {
+	outline: 2px solid #1d2327;
+	outline-offset: -2px;
+	z-index: 2;
+}
+
+.ss-treemap-tile:focus {
+	outline-style: dashed;
+}
+
+.ss-treemap-tile-label {
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ss-treemap-tile-size {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	opacity: 0.85;
+}
+
+.ss-treemap-tooltip {
+	position: fixed;
+	z-index: 100000;
+	background: #1d2327;
+	color: #fff;
+	padding: 8px 10px;
+	border-radius: 4px;
+	font-size: 12px;
+	line-height: 1.5;
+	max-width: 260px;
+	pointer-events: none;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.ss-treemap-tooltip strong {
+	display: block;
+	font-size: 13px;
+}
+
+.ss-treemap-tooltip-path {
+	color: #c3c2b7;
+	word-break: break-all;
+}
+
+.ss-treemap-table-toggle {
+	margin-top: 12px;
+	font-size: 13px;
+}
+
+.ss-treemap-table-toggle summary {
+	cursor: pointer;
+	color: #2271b1;
+}
+
+.ss-treemap-table-toggle table {
+	margin-top: 10px;
+}
+
+.ss-bar-chart {
+	display: flex;
+	align-items: flex-end;
+	gap: 3px;
+	height: 100px;
+}
+
+.ss-bar {
+	flex: 1 1 0;
+	min-width: 2px;
+	background: #2a78d6;
+	border-radius: 2px 2px 0 0;
+}
+
+.ss-toast {
+	position: fixed;
+	bottom: 24px;
+	right: 24px;
+	background: #1d2327;
+	color: #fff;
+	padding: 10px 14px;
+	border-radius: 4px;
+	font-size: 13px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+	z-index: 100000;
+}
+
+.ss-toast button {
+	background: transparent;
+	border: none;
+	color: #6ab0f3;
+	font-weight: 600;
+	cursor: pointer;
+	padding: 0;
+}
+
 @media (prefers-color-scheme: dark) {
 	.ss-card,
 	.ss-panel,
@@ -240,5 +376,19 @@
 
 	.ss-card-value {
 		color: #f0f0f1;
+	}
+
+	.ss-treemap-root {
+		background: #2c2c2c;
+		border-color: #3c3c3c;
+	}
+
+	.ss-treemap-tile {
+		border-color: #1e1e1e;
+	}
+
+	.ss-treemap-tile:hover,
+	.ss-treemap-tile:focus {
+		outline-color: #f0f0f1;
 	}
 }

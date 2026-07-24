@@ -153,19 +153,67 @@ function storage_sherpa_rrmdir( $dir ) {
  */
 function storage_sherpa_get_settings() {
 	$defaults = array(
-		'retention_days'        => 15,
-		'scan_frequency'        => 'weekly',
-		'auto_cleanup'          => array(),
-		'notify_on_scan'        => true,
-		'notify_email'          => get_option( 'admin_email' ),
-		'notify_growth_percent' => 20,
-		'notify_min_orphans'    => 50,
-		'notify_min_log_mb'     => 100,
+		'retention_days'         => 30,
+		'scan_frequency'         => 'weekly',
+		'auto_cleanup'           => array(),
+		'notify_on_scan'         => true,
+		'notify_email'           => get_option( 'admin_email' ),
+		'notify_growth_percent'  => 20,
+		'notify_min_orphans'     => 50,
+		'notify_min_log_mb'      => 100,
+		// Gates for the "orphan_media" / "post_delete_cleanup" auto_cleanup
+		// options — both must pass before an orphan is ever auto-trashed
+		// unattended, on top of "everything still goes through Safe Trash
+		// first, nothing is ever a hard delete."
+		'orphan_min_confidence'  => 95,
+		'orphan_min_age_days'    => 365,
 	);
 
 	$settings = get_option( 'storage_sherpa_settings', array() );
 
 	return wp_parse_args( is_array( $settings ) ? $settings : array(), $defaults );
+}
+
+/**
+ * True if a known cloud-offload plugin (WP Offload Media, Media Cloud,
+ * WP2Static) is active on this install. These plugins routinely remove the
+ * local copy of a file after upload, which would otherwise make every
+ * file-existence-based check in this plugin (Broken Media, Duplicate
+ * Finder, Large File Scanner) misfire against attachments that are working
+ * exactly as intended. Filterable so a site running an offload integration
+ * this list doesn't know about can still declare itself.
+ */
+function storage_sherpa_offload_active() {
+	$detected = defined( 'AS3CF_SETTINGS_TIME' )        // WP Offload Media.
+		|| class_exists( 'Amazon_S3_And_CloudFront' )    // WP Offload Media (legacy class name).
+		|| defined( 'MEDIA_CLOUD_VERSION' )              // Media Cloud.
+		|| class_exists( 'WP2Static\Controller' );        // WP2Static.
+
+	return (bool) apply_filters( 'storage_sherpa_offload_active', $detected );
+}
+
+/**
+ * True if a given attachment's local file is expected to be intentionally
+ * absent. WP Offload Media's own "remove file from server" setting is the
+ * clearest available signal; short of parsing every offload plugin's own
+ * per-attachment metadata (which varies release to release and isn't
+ * verifiable without a live install of each), treating "an offload plugin
+ * is active with local-removal enabled" as "don't trust file_exists() for
+ * this attachment" is the safe, conservative default — a filter is
+ * provided for a more precise per-attachment signal where one exists.
+ */
+function storage_sherpa_attachment_is_offloaded( $attachment_id ) {
+	if ( ! storage_sherpa_offload_active() ) {
+		return false;
+	}
+
+	$settings = get_option( 'as3cf_settings' );
+
+	if ( is_array( $settings ) && ! empty( $settings['remove-local-file'] ) ) {
+		return true;
+	}
+
+	return (bool) apply_filters( 'storage_sherpa_attachment_is_offloaded', false, $attachment_id );
 }
 
 /**

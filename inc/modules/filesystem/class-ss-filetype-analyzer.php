@@ -3,9 +3,12 @@
  * Module 17 — File Type Analyzer.
  *
  * Buckets every file under wp-content by extension into the categories the
- * spec names for the dashboard's "Storage by type" widget. Anything not
- * matching a known extension falls into "unknown" — including audio, which
- * the spec's category list doesn't call out separately.
+ * spec names for the dashboard's "Storage by type" widget, plus 'audio' —
+ * originally left uncategorized here, now broken out since Modules 2-4
+ * (Orphan/Duplicate/Large File) need it as a real category too. Anything not
+ * matching a known extension falls into "unknown". This is the single
+ * canonical extension list other modules should call into rather than
+ * maintaining their own — see SS_Large_File_Scanner::extensions().
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -18,8 +21,9 @@ class SS_Filetype_Analyzer {
 		return array(
 			'images'    => array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico', 'tiff' ),
 			'videos'    => array( 'mp4', 'mov', 'avi', 'wmv', 'mkv', 'webm', 'flv' ),
+			'audio'     => array( 'mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'wma' ),
 			'pdfs'      => array( 'pdf' ),
-			'zip'       => array( 'zip', 'gz', 'tar', 'rar', '7z' ),
+			'zip'       => array( 'zip', 'gz', 'tar', 'rar', '7z', 'bz2' ),
 			'logs'      => array( 'log' ),
 			'fonts'     => array( 'woff', 'woff2', 'ttf', 'otf', 'eot' ),
 			'documents' => array( 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'rtf', 'odt' ),
@@ -30,6 +34,7 @@ class SS_Filetype_Analyzer {
 		return array(
 			'images'    => __( 'Images', 'storage-sherpa' ),
 			'videos'    => __( 'Videos', 'storage-sherpa' ),
+			'audio'     => __( 'Audio', 'storage-sherpa' ),
 			'pdfs'      => __( 'PDFs', 'storage-sherpa' ),
 			'zip'       => __( 'ZIP', 'storage-sherpa' ),
 			'logs'      => __( 'Logs', 'storage-sherpa' ),
@@ -47,6 +52,22 @@ class SS_Filetype_Analyzer {
 			}
 		}
 		return $map;
+	}
+
+	/**
+	 * Flattened, deduplicated list of every known extension across every
+	 * category — the canonical list Modules 3/4 (Duplicate Finder, Large
+	 * File Scanner) filter non-image files against instead of each keeping
+	 * its own separately-maintained copy.
+	 */
+	public static function all_extensions() {
+		$extensions = array();
+
+		foreach ( self::categories() as $category ) {
+			$extensions = array_merge( $extensions, $category );
+		}
+
+		return array_values( array_unique( $extensions ) );
 	}
 
 	public static function scan( $time_budget = 20 ) {

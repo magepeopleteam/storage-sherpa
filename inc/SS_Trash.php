@@ -32,8 +32,10 @@ class SS_Trash {
 	/**
 	 * Moves a real file into the Safe Trash and records a restorable entry.
 	 * Refuses anything outside ABSPATH. Returns the trash row id or WP_Error.
+	 * $batch_id (optional) ties this row to every other row created by the
+	 * same bulk action, so restore_batch() can undo the whole action at once.
 	 */
-	public static function trash_file( $path, $module, $label = '' ) {
+	public static function trash_file( $path, $module, $label = '', $batch_id = null ) {
 		$path = storage_sherpa_normalize_path( $path );
 
 		if ( ! file_exists( $path ) || ! is_file( $path ) ) {
@@ -65,6 +67,7 @@ class SS_Trash {
 				'original_path' => $path,
 				'trashed_path'  => $dest,
 				'size_bytes'    => $size,
+				'batch_id'      => $batch_id,
 			)
 		);
 	}
@@ -74,7 +77,7 @@ class SS_Trash {
 	 * re-inserted verbatim on restore. Caller is responsible for the actual
 	 * DELETE — this only captures the backup copy.
 	 */
-	public static function trash_db_row( $table_name, array $row, $module, $label = '' ) {
+	public static function trash_db_row( $table_name, array $row, $module, $label = '', $batch_id = null ) {
 		return self::insert_entry(
 			array(
 				'item_type'  => 'db_row',
@@ -83,6 +86,7 @@ class SS_Trash {
 				'table_name' => $table_name,
 				'row_data'   => wp_json_encode( $row ),
 				'size_bytes' => strlen( wp_json_encode( $row ) ),
+				'batch_id'   => $batch_id,
 			)
 		);
 	}
@@ -98,6 +102,7 @@ class SS_Trash {
 			'trashed_path'  => null,
 			'table_name'    => null,
 			'row_data'      => null,
+			'batch_id'      => null,
 		);
 
 		$fields = array_merge( $defaults, $fields );
@@ -109,10 +114,45 @@ class SS_Trash {
 		$wpdb->insert(
 			$wpdb->prefix . 'ss_trash_items',
 			$fields,
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d' )
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d' )
 		);
 
 		return (int) $wpdb->insert_id;
+	}
+
+	/**
+	 * Restores every trash row sharing a batch_id in one call — the "Undo"
+	 * toast after a bulk delete restores everything that one action created
+	 * (an attachment's post row, its postmeta, its base file, and every
+	 * thumbnail size) rather than requiring one restore click per row.
+	 */
+	public static function restore_batch( $batch_id ) {
+		global $wpdb;
+
+		if ( ! $batch_id ) {
+			return new WP_Error( 'ss_missing_batch', __( 'No batch id given.', 'storage-sherpa' ) );
+		}
+
+		$ids = $wpdb->get_col(
+			$wpdb->prepare( "SELECT id FROM {$wpdb->prefix}ss_trash_items WHERE batch_id = %s AND restored = 0", $batch_id ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		);
+
+		$restored = 0;
+		$errors   = array();
+
+		foreach ( $ids as $id ) {
+			$result = self::restore( (int) $id );
+			if ( is_wp_error( $result ) ) {
+				$errors[] = $result->get_error_message();
+			} else {
+				++$restored;
+			}
+		}
+
+		return array(
+			'restored' => $restored,
+			'errors'   => $errors,
+		);
 	}
 
 	/**
@@ -198,7 +238,7 @@ class SS_Trash {
 	 * internal unlink() calls become harmless no-ops since the files are
 	 * already relocated by the time it runs.
 	 */
-	public static function trash_attachment( $attachment_id, $module ) {
+	public static function trash_attachment( $attachment_id, $module, $batch_id = null ) {
 		global $wpdb;
 
 		$post = get_post( $attachment_id, ARRAY_A );
@@ -208,10 +248,10 @@ class SS_Trash {
 
 		$meta = $wpdb->get_results( $wpdb->prepare( "SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d", $attachment_id ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
-		SS_Trash::trash_db_row( $wpdb->posts, $post, $module, $post['post_title'] ? $post['post_title'] : ( 'attachment #' . $attachment_id ) );
+		SS_Trash::trash_db_row( $wpdb->posts, $post, $module, $post['post_title'] ? $post['post_title'] : ( 'attachment #' . $attachment_id ), $batch_id );
 
 		foreach ( (array) $meta as $meta_row ) {
-			SS_Trash::trash_db_row( $wpdb->postmeta, array_merge( array( 'post_id' => $attachment_id ), $meta_row ), $module, $meta_row['meta_key'] );
+			SS_Trash::trash_db_row( $wpdb->postmeta, array_merge( array( 'post_id' => $attachment_id ), $meta_row ), $module, $meta_row['meta_key'], $batch_id );
 		}
 
 		$file = get_attached_file( $attachment_id );
@@ -219,7 +259,7 @@ class SS_Trash {
 
 		if ( $file && file_exists( $file ) ) {
 			$bytes += filesize( $file );
-			self::trash_file( $file, $module, basename( $file ) );
+			self::trash_file( $file, $module, basename( $file ), $batch_id );
 		}
 
 		$meta_data = wp_get_attachment_metadata( $attachment_id );
@@ -232,7 +272,7 @@ class SS_Trash {
 				$size_path = $dir . $size['file'];
 				if ( file_exists( $size_path ) ) {
 					$bytes += filesize( $size_path );
-					self::trash_file( $size_path, $module, $size['file'] );
+					self::trash_file( $size_path, $module, $size['file'], $batch_id );
 				}
 			}
 		}
@@ -242,6 +282,45 @@ class SS_Trash {
 		storage_sherpa_log_cleanup( $module, 'trash_attachment:' . $attachment_id, 1, $bytes );
 
 		return true;
+	}
+
+	/**
+	 * Bundles every currently-pending (not yet restored) Safe Trash file
+	 * into one downloadable ZIP — a portable takeaway copy before the
+	 * retention window purges them for good. DB-row/table-dump entries
+	 * (which have no file of their own — the trash row *is* the backup)
+	 * are included as a .json dump instead, so an export is still a
+	 * complete snapshot. Returns the temp zip file's path, or WP_Error.
+	 */
+	public static function export_zip( $limit = 1000 ) {
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			return new WP_Error( 'ss_no_ziparchive', __( 'The ZipArchive PHP extension is not available on this server.', 'storage-sherpa' ) );
+		}
+
+		$items = self::query( array( 'limit' => $limit ) );
+
+		if ( empty( $items ) ) {
+			return new WP_Error( 'ss_empty_trash', __( 'Safe Trash is empty — nothing to export.', 'storage-sherpa' ) );
+		}
+
+		$zip_path = wp_tempnam( 'storage-sherpa-trash-export.zip' );
+
+		$zip = new ZipArchive();
+		if ( true !== $zip->open( $zip_path, ZipArchive::OVERWRITE ) ) {
+			return new WP_Error( 'ss_zip_open_failed', __( 'Could not create the export archive.', 'storage-sherpa' ) );
+		}
+
+		foreach ( $items as $item ) {
+			if ( 'file' === $item->item_type && $item->trashed_path && file_exists( $item->trashed_path ) ) {
+				$zip->addFile( $item->trashed_path, $item->id . '-' . basename( $item->trashed_path ) );
+			} else {
+				$zip->addFromString( $item->id . '-' . sanitize_file_name( $item->label ) . '.json', (string) $item->row_data );
+			}
+		}
+
+		$zip->close();
+
+		return $zip_path;
 	}
 
 	public static function get( $trash_id ) {
