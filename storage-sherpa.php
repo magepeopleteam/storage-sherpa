@@ -37,6 +37,7 @@ register_deactivation_hook( STORAGE_SHERPA_PLUGIN_FILE, array( 'SS_Install', 'de
 require_once STORAGE_SHERPA_PLUGIN_DIR . '/inc/SS_Ignore_Rules.php';
 require_once STORAGE_SHERPA_PLUGIN_DIR . '/inc/SS_Trash.php';
 require_once STORAGE_SHERPA_PLUGIN_DIR . '/inc/SS_Trash_Export.php';
+require_once STORAGE_SHERPA_PLUGIN_DIR . '/inc/SS_Trash_Preview.php';
 require_once STORAGE_SHERPA_PLUGIN_DIR . '/inc/SS_Notifications.php';
 require_once STORAGE_SHERPA_PLUGIN_DIR . '/inc/SS_Cron.php';
 require_once STORAGE_SHERPA_PLUGIN_DIR . '/inc/SS_Background_Process.php';
@@ -108,6 +109,7 @@ function storage_sherpa_init() {
 	SS_Ignore_Rules::init();
 	SS_Trash::init();
 	SS_Trash_Export::init();
+	SS_Trash_Preview::init();
 	SS_Notifications::init();
 	SS_Cron::init();
 	SS_Background_Process::init();

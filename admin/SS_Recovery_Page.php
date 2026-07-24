@@ -131,11 +131,16 @@ class SS_Recovery_Page {
 									<td><input type="checkbox" name="ss_ids[]" value="<?php echo (int) $item->id; ?>" /></td>
 									<td><?php echo esc_html( $item->label ); ?></td>
 									<td>
-										<?php $relative_path = self::relative_path( $item->original_path ); ?>
-										<?php if ( $relative_path ) : ?>
-											<code><?php echo esc_html( $relative_path ); ?></code>
+										<?php if ( SS_Trash_Preview::is_previewable( $item ) ) : ?>
+											<?php $preview_url = SS_Trash_Preview::preview_url( $item->id ); ?>
+											<img class="ss-thumb" src="<?php echo esc_url( $preview_url ); ?>" data-ss-zoom="<?php echo esc_url( $preview_url ); ?>" alt="" />
 										<?php else : ?>
-											&#8212;
+											<?php $relative_path = self::relative_path( $item->original_path ); ?>
+											<?php if ( $relative_path ) : ?>
+												<code><?php echo esc_html( $relative_path ); ?></code>
+											<?php else : ?>
+												&#8212;
+											<?php endif; ?>
 										<?php endif; ?>
 									</td>
 									<td><?php echo esc_html( $item->module ); ?></td>

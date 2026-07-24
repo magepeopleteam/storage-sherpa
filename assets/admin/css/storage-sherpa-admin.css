@@ -767,6 +767,40 @@ body.storage-sherpa-admin #wpcontent {
 .storage-sherpa-admin .ss-btn-danger:focus {
 	background: var(--ss-danger-hover);
 	border-color: var(--ss-danger-hover);
+}
+
+/* wp.components.Button (the Dashboard's "Run Full Scan" — a real @wordpress/
+   components React button, not the plain WP-core `.button` markup the rest
+   of this file targets) ships its own square-ish core admin styling that
+   ignores everything above. Brought in line with .button-primary here so it
+   reads as the same rounded pill CTA as every other primary action. */
+.storage-sherpa-admin .components-button.is-primary {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: auto;
+	padding: 7px 16px;
+	line-height: 1.4;
+	font-size: 13px;
+	font-weight: 500;
+	background: var(--ss-primary);
+	border: 1px solid var(--ss-primary);
+	border-radius: var(--ss-radius-btn);
+	box-shadow: none;
+	text-shadow: none;
+	color: #fff;
+}
+
+.storage-sherpa-admin .components-button.is-primary:hover,
+.storage-sherpa-admin .components-button.is-primary:focus:not(:disabled) {
+	background: var(--ss-primary-hover);
+	border-color: var(--ss-primary-hover);
+	color: #fff;
+}
+
+.storage-sherpa-admin .components-button.is-primary:disabled,
+.storage-sherpa-admin .components-button.is-primary[aria-disabled="true"] {
+	opacity: 0.5;
 	color: #fff;
 }
 
