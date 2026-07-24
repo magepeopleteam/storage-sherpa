@@ -233,6 +233,15 @@
 	background: #f0f0f1;
 }
 
+.ss-filename {
+	display: inline-block;
+	max-width: 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	vertical-align: middle;
+}
+
 .ss-treemap-legend {
 	display: flex;
 	flex-wrap: wrap;
@@ -982,22 +991,53 @@ body.storage-sherpa-admin #wpcontent {
 	background: transparent;
 }
 
-.storage-sherpa-admin .ss-media-filetype-w {
-	margin-left: 10px;
-	padding-left: 10px;
-	border-left: 1px solid var(--ss-border-strong, #d2d4d7);
+.storage-sherpa-admin .tablenav .alignleft.actions {
+	display: flex;
+	align-items: center;
 }
 
-.storage-sherpa-admin .ss-media-filetype-w select {
-	border: 1px solid #cecfd8;
-	background: #fff;
-	border-radius: var(--ss-radius-sm, 12px);
-	padding: 7px 28px 7px 12px;
+.storage-sherpa-admin .ss-tablenav-actions {
+	margin-right: 10px;
+}
+
+/**
+ * Explicit box-sizing + a fixed height, applied identically to both the
+ * "Bulk actions" select and the file-type filter select (and the Apply
+ * button) — the two selects previously picked up slightly different
+ * padding/font-size from two different cascade layers (a generic
+ * `select {}` rule plus a filter-specific one), which is what made them
+ * render at two different heights instead of lining up. One explicit rule
+ * per control type removes that ambiguity outright.
+ */
+.storage-sherpa-admin select.ss-tablenav-select,
+.storage-sherpa-admin input.ss-tablenav-select {
+	box-sizing: border-box;
+	height: 32px;
+	line-height: 30px;
 	font-size: 13px;
+	vertical-align: middle;
+	margin: 0;
+}
+
+.storage-sherpa-admin select.ss-tablenav-select {
+	padding: 0 28px 0 12px;
+	border: 1px solid #cecfd8;
+	border-radius: var(--ss-radius-sm, 12px);
+	background: #fff;
 	box-shadow: none;
 }
 
-.storage-sherpa-admin .ss-media-filetype-w select:focus {
+/* .button's own rule sets 7px top/bottom padding, which — combined with the
+   fixed height + line-height above — would overflow past 32px instead of
+   fitting inside it (box-sizing:border-box only constrains layout sizing;
+   it doesn't clip content that needs more room than that). Zeroing the
+   vertical padding here (keeping the horizontal padding for the button's
+   look) is what actually keeps it the same height as the two selects. */
+.storage-sherpa-admin input.ss-tablenav-select {
+	padding: 0 16px;
+}
+
+.storage-sherpa-admin select.ss-tablenav-select:focus {
 	border-color: var(--ss-primary, #1e7bff);
 	box-shadow: 0 0 0 1px var(--ss-primary, #1e7bff);
 	background: #fff;
@@ -1080,7 +1120,7 @@ body.storage-sherpa-admin #wpcontent {
 		border-color: #3c3c3c;
 	}
 
-	.storage-sherpa-admin .ss-media-filetype-w select {
+	.storage-sherpa-admin select.ss-tablenav-select {
 		background: #26272c;
 		border-color: #3c3c3c;
 		color: #f0f0f1;

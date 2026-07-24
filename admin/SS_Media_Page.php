@@ -323,6 +323,51 @@ class SS_Media_Findings_Table extends WP_List_Table {
 	public function column_size( $item ) {
 		return esc_html( storage_sherpa_format_bytes( $item->file_size ) );
 	}
+
+	/**
+	 * WP_List_Table's own hook for extra controls in the tablenav row —
+	 * called between the (empty, since we don't define get_bulk_actions())
+	 * bulkactions div and the pagination links, on both the top and bottom
+	 * tablenav. Only rendered once (top) to avoid a duplicate #ss-media-filetype
+	 * id, and only on the Orphan Media tab where this filter applies.
+	 */
+	/**
+	 * WP_List_Table's own hook for extra controls in the tablenav row —
+	 * called between the (empty, since we don't define get_bulk_actions())
+	 * bulkactions div and the pagination links, on both the top and bottom
+	 * tablenav. Only rendered once (top) so the "Bulk actions" select/Apply
+	 * and the file-type filter land in the exact same row as the pagination
+	 * — the views()/subsubsub list above it is the only other row on this
+	 * screen, matching the standard WP admin list-table layout (subsubsub
+	 * row, then one tablenav row with actions + filters + pagination).
+	 */
+	public function extra_tablenav( $which ) {
+		if ( 'top' !== $which ) {
+			return;
+		}
+		?>
+		<div class="alignleft actions ss-tablenav-actions">
+			<select name="ss_bulk_action" class="ss-tablenav-select">
+				<option value="-1"><?php esc_html_e( 'Bulk actions', 'storage-sherpa' ); ?></option>
+				<option value="trash"><?php esc_html_e( 'Move to Safe Trash', 'storage-sherpa' ); ?></option>
+			</select>
+			<input type="submit" class="button action ss-tablenav-select" value="<?php esc_attr_e( 'Apply', 'storage-sherpa' ); ?>" />
+		</div>
+		<?php if ( SS_Media_Findings::TYPE_ORPHAN === $this->finding_type ) : ?>
+			<?php $file_type_filter = $this->current_file_type_filter(); ?>
+			<div class="alignleft actions ss-tablenav-actions">
+				<select id="ss-media-filetype" name="file_type" class="ss-tablenav-select" aria-label="<?php esc_attr_e( 'Filter by file type', 'storage-sherpa' ); ?>">
+					<option value=""><?php esc_html_e( 'All file types', 'storage-sherpa' ); ?></option>
+					<?php foreach ( SS_Filetype_Analyzer::labels() as $key => $label ) : ?>
+						<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $file_type_filter, $key ); ?>>
+							<?php echo esc_html( $label ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+			</div>
+		<?php endif; ?>
+		<?php
+	}
 }
 
 class SS_Media_Page {
@@ -418,20 +463,6 @@ class SS_Media_Page {
 							placeholder="<?php esc_attr_e( 'Search by file name…', 'storage-sherpa' ); ?>"
 						/>
 						<button type="submit" class="screen-reader-text"><?php esc_html_e( 'Search', 'storage-sherpa' ); ?></button>
-
-						<?php if ( 'orphan' === $active_tab ) : ?>
-							<label class="ss-media-filetype-w" for="ss-media-filetype">
-								<span class="screen-reader-text"><?php esc_html_e( 'Filter by file type', 'storage-sherpa' ); ?></span>
-								<select id="ss-media-filetype" name="file_type">
-									<option value=""><?php esc_html_e( 'All file types', 'storage-sherpa' ); ?></option>
-									<?php foreach ( SS_Filetype_Analyzer::labels() as $key => $label ) : ?>
-										<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $file_type_filter, $key ); ?>>
-											<?php echo esc_html( $label ); ?>
-										</option>
-									<?php endforeach; ?>
-								</select>
-							</label>
-						<?php endif; ?>
 					</form>
 				<?php endif; ?>
 			</div>
@@ -465,15 +496,6 @@ class SS_Media_Page {
 					<?php $table->views(); ?>
 
 					<form data-ss-bulk-trash="/storage-sherpa/v1/media/trash" id="ss-media-bulk-form">
-						<div class="tablenav top">
-							<div class="alignleft actions">
-								<select name="ss_bulk_action">
-									<option value="-1"><?php esc_html_e( 'Bulk actions', 'storage-sherpa' ); ?></option>
-									<option value="trash"><?php esc_html_e( 'Move to Safe Trash', 'storage-sherpa' ); ?></option>
-								</select>
-								<input type="submit" class="button action" value="<?php esc_attr_e( 'Apply', 'storage-sherpa' ); ?>" />
-							</div>
-						</div>
 						<?php $table->display(); ?>
 					</form>
 				</div>

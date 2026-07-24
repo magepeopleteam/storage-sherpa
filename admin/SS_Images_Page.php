@@ -40,6 +40,19 @@ class SS_Images_Page {
 				}
 			}
 		}
+
+		// scan_merged() itself isn't paginated (it's a live, time-bounded scan
+		// of every image attachment — see the class docblock), but with a
+		// large media library the resulting list can still be long, so the
+		// *display* of it is paginated here, the same 20-per-page WP_List_Table
+		// tables elsewhere in this plugin use.
+		$per_page = 20;
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only pagination.
+		$paged       = max( 1, (int) ( $_GET['paged'] ?? 1 ) );
+		$total_items = count( $rows );
+		$total_pages = max( 1, (int) ceil( $total_items / $per_page ) );
+		$paged       = min( $paged, $total_pages );
+		$page_rows   = array_slice( $rows, ( $paged - 1 ) * $per_page, $per_page );
 		?>
 		<?php SS_Admin::header( __( 'Image Optimizer', 'storage-sherpa' ) ); ?>
 
@@ -97,23 +110,25 @@ class SS_Images_Page {
 						</select>
 						<input type="submit" class="button action" value="<?php esc_attr_e( 'Apply', 'storage-sherpa' ); ?>" />
 					</div>
+					<?php self::render_pagination( $total_items, $paged, $total_pages ); ?>
 				</div>
 
 				<table class="widefat striped">
 					<thead>
 						<tr>
 							<th style="width:32px;"><input type="checkbox" data-ss-select-all /></th>
-							<th><?php esc_html_e( 'File', 'storage-sherpa' ); ?></th>
+							<th style="width:220px;"><?php esc_html_e( 'File', 'storage-sherpa' ); ?></th>
+							<th><?php esc_html_e( 'Path', 'storage-sherpa' ); ?></th>
 							<th><?php esc_html_e( 'Size', 'storage-sherpa' ); ?></th>
 							<th><?php esc_html_e( 'Flags', 'storage-sherpa' ); ?></th>
 							<th></th>
 						</tr>
 					</thead>
 					<tbody>
-						<?php if ( empty( $rows ) ) : ?>
-							<tr><td colspan="5"><?php esc_html_e( 'No images need attention right now — everything is within your size threshold and already has WebP/AVIF siblings.', 'storage-sherpa' ); ?></td></tr>
+						<?php if ( empty( $page_rows ) ) : ?>
+							<tr><td colspan="6"><?php esc_html_e( 'No images need attention right now — everything is within your size threshold and already has WebP/AVIF siblings.', 'storage-sherpa' ); ?></td></tr>
 						<?php endif; ?>
-						<?php foreach ( $rows as $row ) : ?>
+						<?php foreach ( $page_rows as $row ) : ?>
 							<?php $id = $row['attachment_id']; ?>
 							<tr>
 								<td><input type="checkbox" name="ss_ids[]" value="<?php echo (int) $id; ?>" /></td>
@@ -122,7 +137,17 @@ class SS_Images_Page {
 									<?php if ( $thumb ) : ?>
 										<img class="ss-thumb" src="<?php echo esc_url( $thumb[0] ); ?>" alt="" />
 									<?php endif; ?>
-									<?php echo esc_html( basename( $row['file_path'] ) ); ?>
+									<span class="ss-filename" title="<?php echo esc_attr( basename( $row['file_path'] ) ); ?>"><?php echo esc_html( basename( $row['file_path'] ) ); ?></span>
+								</td>
+								<td>
+									<?php
+									$relative_path = str_replace(
+										storage_sherpa_normalize_path( WP_CONTENT_DIR ),
+										'',
+										storage_sherpa_normalize_path( dirname( $row['file_path'] ) )
+									);
+									?>
+									<code><?php echo esc_html( $relative_path ); ?></code>
 								</td>
 								<td><?php echo esc_html( storage_sherpa_format_bytes( $row['file_size'] ) ); ?></td>
 								<td>
@@ -159,8 +184,70 @@ class SS_Images_Page {
 						<?php endforeach; ?>
 					</tbody>
 				</table>
+
+				<div class="tablenav bottom">
+					<?php self::render_pagination( $total_items, $paged, $total_pages ); ?>
+				</div>
 			</form>
 		<?php SS_Admin::footer(); ?>
+		<?php
+	}
+
+	/**
+	 * Same tablenav-pages markup/classes WP_List_Table itself renders — reused
+	 * by hand here since this screen is a plain table (scan_merged() is a
+	 * live, unpaginated scan; only the display of its result is paginated),
+	 * not a WP_List_Table subclass. Picks up WP core's own admin CSS for
+	 * .tablenav-pages/.pagination-links for free, no extra styling needed.
+	 */
+	private static function render_pagination( $total_items, $paged, $total_pages ) {
+		if ( $total_pages <= 1 ) {
+			return;
+		}
+
+		$base_url = remove_query_arg( 'paged' );
+		?>
+		<div class="tablenav-pages">
+			<span class="displaying-num">
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: %s: number of images */
+						_n( '%s item', '%s items', $total_items, 'storage-sherpa' ),
+						number_format_i18n( $total_items )
+					)
+				);
+				?>
+			</span>
+			<span class="pagination-links">
+				<?php if ( $paged > 1 ) : ?>
+					<a class="prev-page button" href="<?php echo esc_url( add_query_arg( 'paged', $paged - 1, $base_url ) ); ?>">
+						<span class="screen-reader-text"><?php esc_html_e( 'Previous page', 'storage-sherpa' ); ?></span>
+						<span aria-hidden="true">&lsaquo;</span>
+					</a>
+				<?php else : ?>
+					<span class="tablenav-pages-navspan button disabled" aria-hidden="true">&lsaquo;</span>
+				<?php endif; ?>
+				<span class="paging-input">
+					<?php
+					printf(
+						/* translators: 1: current page number, 2: total number of pages */
+						esc_html__( '%1$s of %2$s', 'storage-sherpa' ),
+						esc_html( number_format_i18n( $paged ) ),
+						'<span class="total-pages">' . esc_html( number_format_i18n( $total_pages ) ) . '</span>'
+					);
+					?>
+				</span>
+				<?php if ( $paged < $total_pages ) : ?>
+					<a class="next-page button" href="<?php echo esc_url( add_query_arg( 'paged', $paged + 1, $base_url ) ); ?>">
+						<span class="screen-reader-text"><?php esc_html_e( 'Next page', 'storage-sherpa' ); ?></span>
+						<span aria-hidden="true">&rsaquo;</span>
+					</a>
+				<?php else : ?>
+					<span class="tablenav-pages-navspan button disabled" aria-hidden="true">&rsaquo;</span>
+				<?php endif; ?>
+			</span>
+		</div>
 		<?php
 	}
 }

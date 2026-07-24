@@ -32,7 +32,6 @@
 
 	var searchInput      = document.getElementById( 'ss-media-search' );
 	var searchForm       = document.getElementById( 'ss-media-search-form' );
-	var fileTypeSelect   = document.getElementById( 'ss-media-filetype' );
 	var selectionBar     = document.getElementById( 'ss-media-selection-bar' );
 	var selectionText    = document.getElementById( 'ss-media-selection-text' );
 	var selectAllMatchBtn = document.getElementById( 'ss-media-select-all-matching' );
@@ -221,11 +220,20 @@
 		} );
 	}
 
-	if ( fileTypeSelect ) {
-		fileTypeSelect.addEventListener( 'change', function () {
-			reloadTableRegion( buildRegionUrl( { file_type: fileTypeSelect.value, paged: '' } ) );
-		} );
-	}
+	// Delegated on region (not bound directly to the <select>) — the file-type
+	// filter lives inside WP_List_Table's own tablenav (via extra_tablenav()),
+	// which is part of #ss-media-table-region and gets replaced wholesale on
+	// every AJAX search/filter swap. A listener bound to the original select
+	// node would stop firing the moment that node is replaced; region itself
+	// is never replaced (only its innerHTML), so delegating here survives
+	// every swap without needing to rebind anything.
+	region.addEventListener( 'change', function ( e ) {
+		var select = e.target.closest( '#ss-media-filetype' );
+		if ( ! select ) {
+			return;
+		}
+		reloadTableRegion( buildRegionUrl( { file_type: select.value, paged: '' } ) );
+	} );
 
 	// -----------------------------------------------------------------
 	// Chunked bulk delete with a progress bar
