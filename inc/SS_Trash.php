@@ -91,6 +91,38 @@ class SS_Trash {
 		);
 	}
 
+	/**
+	 * Column => $wpdb format, keyed by name rather than position. Matters
+	 * because array_merge( $defaults, $fields ) below does NOT produce a
+	 * fixed column order — it's $defaults' keys first (in $defaults' own
+	 * order), then whichever new keys each caller's $fields adds, in that
+	 * caller's own array-literal order, which differs between trash_file()
+	 * and trash_db_row(). A previous version of this method paired the
+	 * insert with a hardcoded *positional* format array that assumed one
+	 * specific order; whenever the actual order didn't match it (which was
+	 * always, for both callers), $wpdb->insert() silently applied the wrong
+	 * format to the wrong column — label ended up formatted as %d instead
+	 * of %s, coercing every trashed item's label to the string "0". Building
+	 * the format list by looking up each of $fields' actual keys here, in
+	 * whatever order they end up in, makes that class of bug impossible.
+	 */
+	private static function column_formats() {
+		return array(
+			'item_type'     => '%s',
+			'module'        => '%s',
+			'label'         => '%s',
+			'original_path' => '%s',
+			'trashed_path'  => '%s',
+			'table_name'    => '%s',
+			'row_data'      => '%s',
+			'size_bytes'    => '%d',
+			'batch_id'      => '%s',
+			'deleted_at'    => '%s',
+			'expires_at'    => '%s',
+			'restored'      => '%d',
+		);
+	}
+
 	private static function insert_entry( array $fields ) {
 		global $wpdb;
 
@@ -111,11 +143,13 @@ class SS_Trash {
 		$fields['expires_at'] = gmdate( 'Y-m-d H:i:s', time() + ( $days * DAY_IN_SECONDS ) );
 		$fields['restored']   = 0;
 
-		$wpdb->insert(
-			$wpdb->prefix . 'ss_trash_items',
-			$fields,
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d' )
-		);
+		$column_formats = self::column_formats();
+		$formats        = array();
+		foreach ( array_keys( $fields ) as $column ) {
+			$formats[] = isset( $column_formats[ $column ] ) ? $column_formats[ $column ] : '%s';
+		}
+
+		$wpdb->insert( $wpdb->prefix . 'ss_trash_items', $fields, $formats );
 
 		return (int) $wpdb->insert_id;
 	}
@@ -329,25 +363,48 @@ class SS_Trash {
 		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}ss_trash_items WHERE id = %d", $trash_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	}
 
+	/**
+	 * Shared WHERE-clause builder for query()/count_matching() — `search`
+	 * matches against either `label` (the item name every trash entry has)
+	 * or `original_path` (only ever set for item_type = 'file'; NULL for
+	 * db_row/table_dump entries, which a search term simply won't match
+	 * there, same as any other LIKE against a NULL column).
+	 */
+	private static function build_where( $args ) {
+		global $wpdb;
+
+		$where  = array( 'restored = %d' );
+		$params = array( (int) $args['restored'] );
+
+		if ( ! empty( $args['module'] ) ) {
+			$where[]  = 'module = %s';
+			$params[] = $args['module'];
+		}
+
+		if ( ! empty( $args['search'] ) ) {
+			$like     = '%' . $wpdb->esc_like( $args['search'] ) . '%';
+			$where[]  = '( label LIKE %s OR original_path LIKE %s )';
+			$params[] = $like;
+			$params[] = $like;
+		}
+
+		return array( $where, $params );
+	}
+
 	public static function query( $args = array() ) {
 		global $wpdb;
 
 		$defaults = array(
 			'restored' => 0,
 			'module'   => '',
+			'search'   => '',
 			'orderby'  => 'deleted_at DESC',
 			'limit'    => 50,
 			'offset'   => 0,
 		);
 		$args = wp_parse_args( $args, $defaults );
 
-		$where  = array( 'restored = %d' );
-		$params = array( (int) $args['restored'] );
-
-		if ( $args['module'] ) {
-			$where[]  = 'module = %s';
-			$params[] = $args['module'];
-		}
+		list( $where, $params ) = self::build_where( $args );
 
 		$sql = "SELECT * FROM {$wpdb->prefix}ss_trash_items WHERE " . implode( ' AND ', $where )
 			. ' ORDER BY ' . esc_sql( $args['orderby'] )
@@ -357,6 +414,52 @@ class SS_Trash {
 		$params[] = (int) $args['offset'];
 
 		return $wpdb->get_results( $wpdb->prepare( $sql, $params ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	}
+
+	/**
+	 * Total rows matching restored/module/search — backs the Recovery
+	 * Center screen's pagination once a search term narrows the result set.
+	 */
+	public static function count_matching( $args = array() ) {
+		global $wpdb;
+
+		$defaults = array(
+			'restored' => 0,
+			'module'   => '',
+			'search'   => '',
+		);
+		$args = wp_parse_args( $args, $defaults );
+
+		list( $where, $params ) = self::build_where( $args );
+
+		$sql = "SELECT COUNT(*) FROM {$wpdb->prefix}ss_trash_items WHERE " . implode( ' AND ', $where );
+
+		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $params ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	}
+
+	/**
+	 * Every trash id matching restored/module/search, unpaginated — backs
+	 * the Recovery Center screen's "select all N items matching this
+	 * filter" bulk action, same reasoning as SS_Media_Findings::ids(): the
+	 * browser walks this list in small chunks against restore-bulk/
+	 * delete-bulk rather than the server processing everything in one
+	 * request. Capped the same as SS_Media_Findings::ids().
+	 */
+	public static function ids( $args = array() ) {
+		global $wpdb;
+
+		$defaults = array(
+			'restored' => 0,
+			'module'   => '',
+			'search'   => '',
+		);
+		$args = wp_parse_args( $args, $defaults );
+
+		list( $where, $params ) = self::build_where( $args );
+
+		$sql = "SELECT id FROM {$wpdb->prefix}ss_trash_items WHERE " . implode( ' AND ', $where ) . ' ORDER BY id ASC';
+
+		return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( $sql, $params ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 	}
 
 	public static function total_trash_size() {

@@ -173,8 +173,11 @@ class SS_REST_API {
 
 		// --- Module 19: Recovery Center (Safe Trash) --------------------------
 		register_rest_route( self::NS, '/trash', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'trash_list' ), 'permission_callback' => $perm ) );
+		register_rest_route( self::NS, '/trash/ids', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'trash_ids' ), 'permission_callback' => $perm ) );
 		register_rest_route( self::NS, '/trash/(?P<id>\d+)/restore', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'trash_restore' ), 'permission_callback' => $perm ) );
 		register_rest_route( self::NS, '/trash/restore-batch', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'trash_restore_batch' ), 'permission_callback' => $perm, 'args' => array( 'batch_id' => array( 'required' => true ) ) ) );
+		register_rest_route( self::NS, '/trash/restore-bulk', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'trash_restore_bulk' ), 'permission_callback' => $perm, 'args' => array( 'ids' => array( 'required' => true ) ) ) );
+		register_rest_route( self::NS, '/trash/delete-bulk', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'trash_delete_bulk' ), 'permission_callback' => $perm, 'args' => array( 'ids' => array( 'required' => true ) ) ) );
 		register_rest_route( self::NS, '/trash/(?P<id>\d+)', array( 'methods' => 'DELETE', 'callback' => array( __CLASS__, 'trash_delete' ), 'permission_callback' => $perm ) );
 
 		// --- Module 23: Ignore Rules ---------------------------------------------
@@ -712,6 +715,69 @@ class SS_REST_API {
 	public static function trash_delete( WP_REST_Request $request ) {
 		$result = SS_Trash::permanently_delete( (int) $request->get_param( 'id' ) );
 		return self::maybe_error( $result ) ?? self::ok( array( 'deleted' => true ) );
+	}
+
+	/**
+	 * Every trash id matching the current search filter, unpaginated —
+	 * powers the Recovery Center screen's "select all N items matching this
+	 * filter" bulk action, same shape as media_ids() above.
+	 */
+	public static function trash_ids( WP_REST_Request $request ) {
+		$ids = SS_Trash::ids(
+			array(
+				'search' => $request->get_param( 'search' ) ?: '',
+			)
+		);
+
+		$cap       = 20000;
+		$truncated = count( $ids ) > $cap;
+		if ( $truncated ) {
+			$ids = array_slice( $ids, 0, $cap );
+		}
+
+		return self::ok(
+			array(
+				'ids'       => $ids,
+				'count'     => count( $ids ),
+				'truncated' => $truncated,
+			)
+		);
+	}
+
+	/**
+	 * Restores a batch of trash ids — deliberately just one request's worth
+	 * (see media_ids()/media_trash() above for why), the Recovery Center
+	 * screen's bulk "Restore" action calls this repeatedly with small
+	 * chunks of a much larger id list rather than sending everything at
+	 * once.
+	 */
+	public static function trash_restore_bulk( WP_REST_Request $request ) {
+		$ids     = array_map( 'intval', (array) $request->get_param( 'ids' ) );
+		$results = array();
+
+		foreach ( $ids as $id ) {
+			$result         = SS_Trash::restore( $id );
+			$results[ $id ] = is_wp_error( $result ) ? $result->get_error_message() : true;
+		}
+
+		return self::ok( array( 'results' => $results ) );
+	}
+
+	/**
+	 * Permanently deletes a batch of trash ids — same one-request-worth-at-a-
+	 * time reasoning as trash_restore_bulk() above. No Safe Trash backing
+	 * this one, by definition — this *is* the permanent delete.
+	 */
+	public static function trash_delete_bulk( WP_REST_Request $request ) {
+		$ids     = array_map( 'intval', (array) $request->get_param( 'ids' ) );
+		$results = array();
+
+		foreach ( $ids as $id ) {
+			$result         = SS_Trash::permanently_delete( $id );
+			$results[ $id ] = is_wp_error( $result ) ? $result->get_error_message() : true;
+		}
+
+		return self::ok( array( 'results' => $results ) );
 	}
 
 	// ---------------------------------------------------------------------

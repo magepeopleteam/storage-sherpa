@@ -183,6 +183,65 @@ class SS_Admin {
 		<?php
 	}
 
+	/**
+	 * Same tablenav-pages markup/classes WP_List_Table itself renders — for
+	 * the plain (non-WP_List_Table) screens in this plugin that still need
+	 * pagination over a PHP-array result set: Image Optimizer's live scan,
+	 * Recovery Center's Safe Trash listing. Shared here rather than
+	 * duplicated per screen. Picks up WP core's own admin CSS for
+	 * .tablenav-pages/.pagination-links for free, no extra styling needed.
+	 */
+	public static function render_pagination( $total_items, $paged, $total_pages ) {
+		if ( $total_pages <= 1 ) {
+			return;
+		}
+
+		$base_url = remove_query_arg( 'paged' );
+		?>
+		<div class="tablenav-pages">
+			<span class="displaying-num">
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: %s: number of items */
+						_n( '%s item', '%s items', $total_items, 'storage-sherpa' ),
+						number_format_i18n( $total_items )
+					)
+				);
+				?>
+			</span>
+			<span class="pagination-links">
+				<?php if ( $paged > 1 ) : ?>
+					<a class="prev-page button" href="<?php echo esc_url( add_query_arg( 'paged', $paged - 1, $base_url ) ); ?>">
+						<span class="screen-reader-text"><?php esc_html_e( 'Previous page', 'storage-sherpa' ); ?></span>
+						<span aria-hidden="true">&lsaquo;</span>
+					</a>
+				<?php else : ?>
+					<span class="tablenav-pages-navspan button disabled" aria-hidden="true">&lsaquo;</span>
+				<?php endif; ?>
+				<span class="paging-input">
+					<?php
+					printf(
+						/* translators: 1: current page number, 2: total number of pages */
+						esc_html__( '%1$s of %2$s', 'storage-sherpa' ),
+						esc_html( number_format_i18n( $paged ) ),
+						'<span class="total-pages">' . esc_html( number_format_i18n( $total_pages ) ) . '</span>'
+					);
+					?>
+				</span>
+				<?php if ( $paged < $total_pages ) : ?>
+					<a class="next-page button" href="<?php echo esc_url( add_query_arg( 'paged', $paged + 1, $base_url ) ); ?>">
+						<span class="screen-reader-text"><?php esc_html_e( 'Next page', 'storage-sherpa' ); ?></span>
+						<span aria-hidden="true">&rsaquo;</span>
+					</a>
+				<?php else : ?>
+					<span class="tablenav-pages-navspan button disabled" aria-hidden="true">&rsaquo;</span>
+				<?php endif; ?>
+			</span>
+		</div>
+		<?php
+	}
+
 	public static function enqueue_assets( $hook ) {
 		if ( ! self::is_plugin_screen() ) {
 			return;
@@ -310,6 +369,36 @@ class SS_Admin {
 						'confirmCompress' => __( 'Re-encode every selected image at a lower quality? Each original is backed up to Safe Trash first.', 'storage-sherpa' ),
 						/* translators: %1$d: images processed so far, %2$d: total images in this bulk action */
 						'progress'        => __( '%1$d of %2$d processed…', 'storage-sherpa' ),
+					),
+				)
+			);
+		}
+
+		if ( 'storage-sherpa-recovery' === $plugin_page ) {
+			wp_enqueue_script(
+				'storage-sherpa-recovery',
+				STORAGE_SHERPA_PLUGIN_URL . '/assets/admin/js/storage-sherpa-recovery.js',
+				array( 'wp-api-fetch', 'storage-sherpa-admin' ),
+				STORAGE_SHERPA_PLUGIN_VERSION,
+				true
+			);
+
+			wp_localize_script(
+				'storage-sherpa-recovery',
+				'StorageSherpaRecovery',
+				array(
+					'i18n' => array(
+						/* translators: %d: number of items currently checked */
+						'nSelected'         => __( '%d selected', 'storage-sherpa' ),
+						/* translators: %d: total number of items matching the current filter */
+						'selectAllMatching' => __( 'Select all %d items matching this filter', 'storage-sherpa' ),
+						/* translators: %d: total number of items matching the current filter */
+						'allSelected'       => __( 'All %d items selected.', 'storage-sherpa' ),
+						/* translators: %d: total number of items about to be permanently deleted */
+						'confirmDeleteAll'  => __( 'Permanently delete all %d matching items? This cannot be undone.', 'storage-sherpa' ),
+						'fetchingIds'       => __( 'Finding matching items…', 'storage-sherpa' ),
+						/* translators: %1$d: items processed so far, %2$d: total items in this bulk action */
+						'progress'          => __( '%1$d of %2$d processed…', 'storage-sherpa' ),
 					),
 				)
 			);

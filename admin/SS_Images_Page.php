@@ -110,7 +110,7 @@ class SS_Images_Page {
 						</select>
 						<input type="submit" class="button action" value="<?php esc_attr_e( 'Apply', 'storage-sherpa' ); ?>" />
 					</div>
-					<?php self::render_pagination( $total_items, $paged, $total_pages ); ?>
+					<?php SS_Admin::render_pagination( $total_items, $paged, $total_pages ); ?>
 				</div>
 
 				<table class="widefat striped">
@@ -192,68 +192,10 @@ class SS_Images_Page {
 				</table>
 
 				<div class="tablenav bottom">
-					<?php self::render_pagination( $total_items, $paged, $total_pages ); ?>
+					<?php SS_Admin::render_pagination( $total_items, $paged, $total_pages ); ?>
 				</div>
 			</form>
 		<?php SS_Admin::footer(); ?>
-		<?php
-	}
-
-	/**
-	 * Same tablenav-pages markup/classes WP_List_Table itself renders — reused
-	 * by hand here since this screen is a plain table (scan_merged() is a
-	 * live, unpaginated scan; only the display of its result is paginated),
-	 * not a WP_List_Table subclass. Picks up WP core's own admin CSS for
-	 * .tablenav-pages/.pagination-links for free, no extra styling needed.
-	 */
-	private static function render_pagination( $total_items, $paged, $total_pages ) {
-		if ( $total_pages <= 1 ) {
-			return;
-		}
-
-		$base_url = remove_query_arg( 'paged' );
-		?>
-		<div class="tablenav-pages">
-			<span class="displaying-num">
-				<?php
-				echo esc_html(
-					sprintf(
-						/* translators: %s: number of images */
-						_n( '%s item', '%s items', $total_items, 'storage-sherpa' ),
-						number_format_i18n( $total_items )
-					)
-				);
-				?>
-			</span>
-			<span class="pagination-links">
-				<?php if ( $paged > 1 ) : ?>
-					<a class="prev-page button" href="<?php echo esc_url( add_query_arg( 'paged', $paged - 1, $base_url ) ); ?>">
-						<span class="screen-reader-text"><?php esc_html_e( 'Previous page', 'storage-sherpa' ); ?></span>
-						<span aria-hidden="true">&lsaquo;</span>
-					</a>
-				<?php else : ?>
-					<span class="tablenav-pages-navspan button disabled" aria-hidden="true">&lsaquo;</span>
-				<?php endif; ?>
-				<span class="paging-input">
-					<?php
-					printf(
-						/* translators: 1: current page number, 2: total number of pages */
-						esc_html__( '%1$s of %2$s', 'storage-sherpa' ),
-						esc_html( number_format_i18n( $paged ) ),
-						'<span class="total-pages">' . esc_html( number_format_i18n( $total_pages ) ) . '</span>'
-					);
-					?>
-				</span>
-				<?php if ( $paged < $total_pages ) : ?>
-					<a class="next-page button" href="<?php echo esc_url( add_query_arg( 'paged', $paged + 1, $base_url ) ); ?>">
-						<span class="screen-reader-text"><?php esc_html_e( 'Next page', 'storage-sherpa' ); ?></span>
-						<span aria-hidden="true">&rsaquo;</span>
-					</a>
-				<?php else : ?>
-					<span class="tablenav-pages-navspan button disabled" aria-hidden="true">&rsaquo;</span>
-				<?php endif; ?>
-			</span>
-		</div>
 		<?php
 	}
 }
