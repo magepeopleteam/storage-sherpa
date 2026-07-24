@@ -16,8 +16,7 @@ class SS_Backups_Page {
 
 		$groups = SS_Backup_Cleanup::find_backup_dirs();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Backup Cleanup', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Backup Cleanup', 'storage-sherpa' ) ); ?>
 			<p class="ss-muted"><?php esc_html_e( 'Detects UpdraftPlus, Duplicator, Solid Backup/BackupBuddy, BackWPup, All-in-One WP Migration, and WPvivid backup folders by their default locations.', 'storage-sherpa' ); ?></p>
 
 			<div class="ss-toolbar">
@@ -63,7 +62,7 @@ class SS_Backups_Page {
 					</table>
 				</div>
 			<?php endforeach; ?>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }

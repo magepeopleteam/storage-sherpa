@@ -14,13 +14,13 @@ class SS_Dashboard {
 		if ( ! storage_sherpa_current_user_can() ) {
 			return;
 		}
+
+		SS_Admin::header( __( 'Dashboard', 'storage-sherpa' ) );
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Storage Sherpa', 'storage-sherpa' ); ?></h1>
 			<div id="storage-sherpa-dashboard-root" class="storage-sherpa-dashboard-root">
 				<p class="storage-sherpa-loading"><?php esc_html_e( 'Loading…', 'storage-sherpa' ); ?></p>
 			</div>
-		</div>
 		<?php
+		SS_Admin::footer();
 	}
 }

@@ -81,12 +81,20 @@ class SS_REST_API {
 		);
 		register_rest_route(
 			self::NS,
+			'/media/(?P<type>orphan|duplicate|large|broken|unused_size|broken_link|oversized)/ids',
+			array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'media_ids' ), 'permission_callback' => $perm )
+		);
+		register_rest_route(
+			self::NS,
 			'/media/trash',
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( __CLASS__, 'media_trash' ),
 				'permission_callback' => $perm,
-				'args'                => array( 'ids' => array( 'required' => true ) ),
+				'args'                => array(
+					'ids'      => array( 'required' => true ),
+					'batch_id' => array( 'required' => false ),
+				),
 			)
 		);
 
@@ -274,10 +282,64 @@ class SS_REST_API {
 		);
 	}
 
+	/**
+	 * Every finding id matching the current status/search filter, unpaginated
+	 * — powers the Media Findings screen's "select all N items matching this
+	 * filter" bulk action. The browser then walks this list in small chunks
+	 * against media_trash() rather than the server trashing everything in one
+	 * request, which is what actually keeps a very large selection from
+	 * hitting a request timeout or memory limit. Capped at a generous 20,000
+	 * ids as a sanity limit — a plain id list stays lightweight well past
+	 * that, so the cap exists to bound worst-case response size, not because
+	 * larger sites are expected to hit it.
+	 */
+	public static function media_ids( WP_REST_Request $request ) {
+		$type = $request->get_param( 'type' );
+		list( , $finding_type ) = self::media_type_map()[ $type ];
+
+		$ids = SS_Media_Findings::ids(
+			$finding_type,
+			array(
+				'status' => $request->get_param( 'status' ) ?: '',
+				'search' => $request->get_param( 'search' ) ?: '',
+			)
+		);
+
+		$cap       = 20000;
+		$truncated = count( $ids ) > $cap;
+		if ( $truncated ) {
+			$ids = array_slice( $ids, 0, $cap );
+		}
+
+		return self::ok(
+			array(
+				'ids'       => $ids,
+				'count'     => count( $ids ),
+				'truncated' => $truncated,
+			)
+		);
+	}
+
+	/**
+	 * Trashes a batch of finding ids — deliberately just one request's worth,
+	 * never the whole selection. The Media Findings screen's "select all"
+	 * bulk action calls this repeatedly with small chunks of a much larger id
+	 * list (see media_ids() above) rather than sending everything at once, so
+	 * a large cleanup never risks a single request timing out or exhausting
+	 * memory. An optional client-supplied batch_id lets every chunk of one
+	 * user-initiated bulk delete share a single Safe Trash batch, so Undo
+	 * (trash_restore_batch()) restores the whole selection in one call
+	 * instead of just the last chunk.
+	 */
 	public static function media_trash( WP_REST_Request $request ) {
-		$ids      = array_map( 'intval', (array) $request->get_param( 'ids' ) );
-		$results  = array();
-		$batch_id = wp_generate_password( 20, false, false );
+		$ids             = array_map( 'intval', (array) $request->get_param( 'ids' ) );
+		$results         = array();
+		$requested_batch = $request->get_param( 'batch_id' );
+		$batch_id        = $requested_batch ? substr( sanitize_text_field( $requested_batch ), 0, 64 ) : '';
+
+		if ( ! $batch_id ) {
+			$batch_id = wp_generate_password( 20, false, false );
+		}
 
 		foreach ( $ids as $finding_id ) {
 			$finding = SS_Media_Findings::get( $finding_id );

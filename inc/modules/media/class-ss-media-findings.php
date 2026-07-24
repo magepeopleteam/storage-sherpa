@@ -86,24 +86,44 @@ class SS_Media_Findings {
 		return __( 'No usage detected', 'storage-sherpa' );
 	}
 
+	/**
+	 * Shared WHERE-clause builder for query()/ids()/count_matching() — one
+	 * place that knows how `status` and `search` (file name / path, matched
+	 * via LIKE against file_path) translate into SQL, so the three read
+	 * paths can never drift out of sync with each other.
+	 */
+	private static function build_where( $finding_type, $args ) {
+		global $wpdb;
+
+		$where  = array( 'finding_type = %s' );
+		$params = array( $finding_type );
+
+		if ( ! empty( $args['status'] ) ) {
+			$where[]  = 'status = %s';
+			$params[] = $args['status'];
+		}
+
+		if ( ! empty( $args['search'] ) ) {
+			$where[]  = 'file_path LIKE %s';
+			$params[] = '%' . $wpdb->esc_like( $args['search'] ) . '%';
+		}
+
+		return array( $where, $params );
+	}
+
 	public static function query( $finding_type, $args = array() ) {
 		global $wpdb;
 
 		$defaults = array(
 			'status'  => '',
+			'search'  => '',
 			'orderby' => 'file_size DESC',
 			'limit'   => 200,
 			'offset'  => 0,
 		);
 		$args = wp_parse_args( $args, $defaults );
 
-		$where  = array( 'finding_type = %s' );
-		$params = array( $finding_type );
-
-		if ( $args['status'] ) {
-			$where[]  = 'status = %s';
-			$params[] = $args['status'];
-		}
+		list( $where, $params ) = self::build_where( $finding_type, $args );
 
 		$sql = "SELECT * FROM {$wpdb->prefix}ss_media_findings WHERE " . implode( ' AND ', $where )
 			. ' ORDER BY ' . esc_sql( $args['orderby'] )
@@ -113,6 +133,49 @@ class SS_Media_Findings {
 		$params[] = (int) $args['offset'];
 
 		return $wpdb->get_results( $wpdb->prepare( $sql, $params ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	}
+
+	/**
+	 * Every id matching status/search, unpaginated — backs the Media
+	 * Findings screen's "select all N items matching this filter" bulk
+	 * action, which needs the full id list up front so the browser can walk
+	 * it in small chunks (see SS_REST_API::media_trash()) instead of the
+	 * server trying to process everything in one request.
+	 */
+	public static function ids( $finding_type, $args = array() ) {
+		global $wpdb;
+
+		$defaults = array(
+			'status' => '',
+			'search' => '',
+		);
+		$args = wp_parse_args( $args, $defaults );
+
+		list( $where, $params ) = self::build_where( $finding_type, $args );
+
+		$sql = "SELECT id FROM {$wpdb->prefix}ss_media_findings WHERE " . implode( ' AND ', $where ) . ' ORDER BY id ASC';
+
+		return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( $sql, $params ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	}
+
+	/**
+	 * Total rows matching status/search — used for pagination once a search
+	 * term narrows the result set below the unfiltered per-status counts().
+	 */
+	public static function count_matching( $finding_type, $args = array() ) {
+		global $wpdb;
+
+		$defaults = array(
+			'status' => '',
+			'search' => '',
+		);
+		$args = wp_parse_args( $args, $defaults );
+
+		list( $where, $params ) = self::build_where( $finding_type, $args );
+
+		$sql = "SELECT COUNT(*) FROM {$wpdb->prefix}ss_media_findings WHERE " . implode( ' AND ', $where );
+
+		return (int) $wpdb->get_var( $wpdb->prepare( $sql, $params ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 	}
 
 	public static function get( $id ) {

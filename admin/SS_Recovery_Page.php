@@ -25,8 +25,7 @@ class SS_Recovery_Page {
 		);
 		$settings = storage_sherpa_get_settings();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Recovery Center', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Recovery Center', 'storage-sherpa' ) ); ?>
 			<p class="ss-muted">
 				<?php
 				printf(
@@ -77,7 +76,7 @@ class SS_Recovery_Page {
 									data-ss-action="/storage-sherpa/v1/trash/<?php echo (int) $item->id; ?>/restore">
 									<?php esc_html_e( 'Restore', 'storage-sherpa' ); ?>
 								</button>
-								<button class="button"
+								<button class="button ss-btn-danger"
 									data-ss-action="/storage-sherpa/v1/trash/<?php echo (int) $item->id; ?>"
 									data-ss-method="DELETE"
 									data-ss-confirm="<?php esc_attr_e( 'Permanently delete? This cannot be undone.', 'storage-sherpa' ); ?>">
@@ -88,7 +87,7 @@ class SS_Recovery_Page {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }

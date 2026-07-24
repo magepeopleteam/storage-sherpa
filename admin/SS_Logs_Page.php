@@ -16,8 +16,7 @@ class SS_Logs_Page {
 
 		$logs = SS_Log_Cleaner::find_logs();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Log Cleaner', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Log Cleaner', 'storage-sherpa' ) ); ?>
 			<p class="ss-muted"><?php esc_html_e( 'Only scans inside wp-content — server-level Apache/NGINX logs live outside the WordPress install and are out of reach here.', 'storage-sherpa' ); ?></p>
 
 			<div class="ss-toolbar">
@@ -56,7 +55,7 @@ class SS_Logs_Page {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }

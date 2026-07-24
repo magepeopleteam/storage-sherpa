@@ -17,8 +17,7 @@ class SS_Cache_Page {
 
 		$targets = SS_Cache_Cleaner::available_targets();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Cache Cleaner', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Cache Cleaner', 'storage-sherpa' ) ); ?>
 
 			<div class="ss-toolbar">
 				<button class="button button-primary" data-ss-action="/storage-sherpa/v1/cache/purge" data-ss-reload="false">
@@ -52,7 +51,7 @@ class SS_Cache_Page {
 			</table>
 
 			<p class="ss-muted"><?php esc_html_e( 'Only cache mechanisms actually detected as active on this site are listed. Cache purges run immediately (not routed through Safe Trash) — caches are regenerable by definition.', 'storage-sherpa' ); ?></p>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }

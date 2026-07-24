@@ -27,8 +27,7 @@ class SS_Reports_Page {
 			$max_daily = max( $max_daily, $day['bytes'] );
 		}
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Reports', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Reports', 'storage-sherpa' ) ); ?>
 
 			<div class="ss-stat-grid">
 				<div class="ss-card">
@@ -109,7 +108,7 @@ class SS_Reports_Page {
 					</tbody>
 				</table>
 			</div>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }

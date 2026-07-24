@@ -124,10 +124,21 @@
 	 * row, its postmeta, its base file, every thumbnail size) sharing one
 	 * batch_id — this toast's Undo button restores all of them in one call
 	 * via /trash/restore-batch rather than sending the admin to Recovery
-	 * Center to restore each row by hand. Auto-dismisses (and reloads) after
-	 * 8s if left untouched, same as a typical "action taken" toast pattern.
+	 * Center to restore each row by hand. Auto-dismisses after 8s if left
+	 * untouched, same as a typical "action taken" toast pattern.
+	 *
+	 * onDone (optional) runs after a successful undo, and also after the
+	 * auto-dismiss timeout — defaults to a full page reload (the original
+	 * behavior every existing call site still gets), but callers that
+	 * already know how to refresh just their own screen in place — the
+	 * Media Findings chunked bulk-delete flow, for one — can pass their own
+	 * instead of forcing a full navigation.
 	 */
-	function showUndoToast( batchId ) {
+	function showUndoToast( batchId, onDone ) {
+		onDone = onDone || function () {
+			window.location.reload();
+		};
+
 		var toast = document.createElement( 'div' );
 		toast.className = 'ss-toast';
 
@@ -144,7 +155,8 @@
 				method: 'POST',
 				data: { batch_id: batchId },
 			} ).then( function () {
-				window.location.reload();
+				toast.remove();
+				onDone();
 			} );
 		} );
 
@@ -153,9 +165,12 @@
 		document.body.appendChild( toast );
 
 		var dismissTimer = window.setTimeout( function () {
-			window.location.reload();
+			toast.remove();
+			onDone();
 		}, 8000 );
 	}
+
+	window.StorageSherpaApi.showUndoToast = showUndoToast;
 
 	function pollScan( startBtn ) {
 		var progressEl = document.getElementById( startBtn.getAttribute( 'data-ss-progress-target' ) || 'ss-scan-progress' );
@@ -193,15 +208,20 @@
 		} );
 		document.addEventListener( 'submit', handleBulkAction );
 
-		document.querySelectorAll( '[data-ss-select-all]' ).forEach( function ( master ) {
-			master.addEventListener( 'change', function () {
-				var form = master.closest( 'form' );
-				if ( ! form ) {
-					return;
-				}
-				form.querySelectorAll( 'input[type="checkbox"][name="ss_ids[]"]' ).forEach( function ( cb ) {
-					cb.checked = master.checked;
-				} );
+		// Delegated (not bound per-element) so a "select all" checkbox
+		// rendered later by an AJAX-swapped region — e.g. the Media Findings
+		// search results — keeps working without needing its own rebind.
+		document.addEventListener( 'change', function ( e ) {
+			var master = e.target.closest( '[data-ss-select-all]' );
+			if ( ! master ) {
+				return;
+			}
+			var form = master.closest( 'form' );
+			if ( ! form ) {
+				return;
+			}
+			form.querySelectorAll( 'input[type="checkbox"][name="ss_ids[]"]' ).forEach( function ( cb ) {
+				cb.checked = master.checked;
 			} );
 		} );
 	} );

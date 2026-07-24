@@ -20,8 +20,7 @@ class SS_Scan_Page {
 		$filetypes = array();
 		$labels    = SS_Filetype_Analyzer::labels();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Storage Analyzer', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Storage Analyzer', 'storage-sherpa' ) ); ?>
 
 			<div class="ss-toolbar">
 				<button class="button button-primary" data-ss-scan data-ss-progress-target="ss-scan-progress">
@@ -129,7 +128,7 @@ class SS_Scan_Page {
 					</tbody>
 				</table>
 			</div>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<script>
 		document.getElementById('ss-filetype-scan').addEventListener('click', function () {
 			var btn = this;

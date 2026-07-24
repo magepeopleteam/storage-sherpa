@@ -20,8 +20,7 @@ class SS_Filetypes_Page {
 		$labels = SS_Filetype_Analyzer::labels();
 		$grand  = array_sum( wp_list_pluck( $totals, 'size' ) );
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'File Type Analyzer', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'File Type Analyzer', 'storage-sherpa' ) ); ?>
 			<p class="ss-muted"><?php esc_html_e( 'Storage under wp-content, broken down by file extension.', 'storage-sherpa' ); ?></p>
 
 			<table class="widefat striped">
@@ -45,7 +44,7 @@ class SS_Filetypes_Page {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }

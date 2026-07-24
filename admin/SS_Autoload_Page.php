@@ -17,8 +17,7 @@ class SS_Autoload_Page {
 		$options = SS_Autoload_Analyzer::scan( 100 );
 		$total   = SS_Autoload_Analyzer::total_autoload_size();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Autoload Option Analyzer', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Autoload Option Analyzer', 'storage-sherpa' ) ); ?>
 			<p class="ss-muted">
 				<?php
 				printf(
@@ -56,7 +55,7 @@ class SS_Autoload_Page {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }

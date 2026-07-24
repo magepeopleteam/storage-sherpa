@@ -16,8 +16,7 @@ class SS_Cron_Page {
 
 		$events = SS_Cron_Manager::list_events();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Cron Manager', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Cron Manager', 'storage-sherpa' ) ); ?>
 			<p class="ss-muted"><?php esc_html_e( '"Overdue" is a heuristic (scheduled time is over an hour in the past) — WordPress itself doesn\'t record whether a cron run succeeded.', 'storage-sherpa' ); ?></p>
 
 			<table class="widefat striped">
@@ -60,7 +59,7 @@ class SS_Cron_Page {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }

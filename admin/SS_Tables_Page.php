@@ -19,8 +19,7 @@ class SS_Tables_Page {
 
 		$tables = SS_Orphan_Tables::scan();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Orphan Database Tables', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Orphan Database Tables', 'storage-sherpa' ) ); ?>
 			<p class="ss-muted">
 				<?php esc_html_e( 'Best-effort detection: tables that don\'t match any currently active plugin or theme. Always review before dropping — "estimated plugin" is a guess, not a certainty.', 'storage-sherpa' ); ?>
 			</p>
@@ -59,7 +58,7 @@ class SS_Tables_Page {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }

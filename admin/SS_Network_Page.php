@@ -58,8 +58,7 @@ class SS_Network_Page {
 		$grand_total = array_sum( wp_list_pluck( $rows, 'total_size' ) );
 		$grand_trash = array_sum( wp_list_pluck( $rows, 'trash_size' ) );
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Storage Sherpa — Network', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Storage Sherpa — Network', 'storage-sherpa' ) ); ?>
 
 			<?php if ( null !== $scanned ) : ?>
 				<div class="notice notice-success">
@@ -125,7 +124,7 @@ class SS_Network_Page {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 

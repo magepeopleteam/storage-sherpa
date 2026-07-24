@@ -149,6 +149,120 @@ class SS_Orphan_Media_Scanner {
 		);
 	}
 
+	/**
+	 * Turns one of this class's own internal `reason` strings (e.g.
+	 * "edd_download_file:download#123", "acf_field:hero_image:post#45") into
+	 * a human label plus the referencing post id, if any — so the Media
+	 * Findings screen can show *where* a "used" file is actually used
+	 * instead of just the raw machine-readable reason. Kept here rather than
+	 * in the admin screen since this is the one place that knows every shape
+	 * a reason string can take.
+	 *
+	 * @return array{label: string, post_id: int}
+	 */
+	public static function describe_reason( $reason ) {
+		$result = array(
+			'label'   => '',
+			'post_id' => 0,
+		);
+
+		if ( ! $reason ) {
+			return $result;
+		}
+
+		if ( preg_match( '/#(\d+)$/', $reason, $m ) ) {
+			$result['post_id'] = (int) $m[1];
+			$reason            = substr( $reason, 0, -strlen( $m[0] ) );
+		}
+
+		$parts  = explode( ':', $reason );
+		$source = array_shift( $parts );
+		$extra  = isset( $parts[0] ) ? $parts[0] : '';
+
+		switch ( $source ) {
+			case 'featured_image':
+				$label = __( 'Featured image', 'storage-sherpa' );
+				break;
+			case 'woocommerce_gallery':
+				$label = __( 'WooCommerce product gallery', 'storage-sherpa' );
+				break;
+			case 'woocommerce_downloadable_file':
+				$label = __( 'WooCommerce downloadable file', 'storage-sherpa' );
+				break;
+			case 'edd_download_file':
+				$label = __( 'Easy Digital Downloads file', 'storage-sherpa' );
+				break;
+			case 'elementor':
+				$label = __( 'Elementor', 'storage-sherpa' );
+				break;
+			case 'divi_gallery':
+				$label = __( 'Divi gallery', 'storage-sherpa' );
+				break;
+			case 'wpbakery_single_image':
+				$label = __( 'WPBakery image', 'storage-sherpa' );
+				break;
+			case 'wpbakery_gallery':
+				$label = __( 'WPBakery gallery', 'storage-sherpa' );
+				break;
+			case 'beaver_builder':
+				$label = __( 'Beaver Builder (possible match)', 'storage-sherpa' );
+				break;
+			case 'theme_file':
+				$label = __( 'Theme template/stylesheet', 'storage-sherpa' );
+				break;
+			case 'site_icon':
+				$label = __( 'Site icon', 'storage-sherpa' );
+				break;
+			case 'custom_logo':
+				$label = __( 'Custom logo', 'storage-sherpa' );
+				break;
+			case 'header_image':
+				$label = __( 'Header image', 'storage-sherpa' );
+				break;
+			case 'post_content':
+				$label = __( 'Post content', 'storage-sherpa' );
+				break;
+			case 'post_content(heuristic)':
+				$label = __( 'Post content (possible match)', 'storage-sherpa' );
+				break;
+			case 'gallery_shortcode':
+				$label = __( '[gallery] shortcode', 'storage-sherpa' );
+				break;
+			case 'acf_field':
+				$label = $extra
+					? sprintf(
+						/* translators: %s: ACF field name */
+						__( 'ACF field "%s"', 'storage-sherpa' ),
+						str_replace( '_', ' ', $extra )
+					)
+					: __( 'ACF field', 'storage-sherpa' );
+				break;
+			case 'widget':
+				$label = $extra
+					? sprintf(
+						/* translators: %s: widget type */
+						__( 'Widget (%s)', 'storage-sherpa' ),
+						str_replace( '_', ' ', $extra )
+					)
+					: __( 'Widget', 'storage-sherpa' );
+				break;
+			case 'meta':
+				$label = ( 'builder-content' === $extra )
+					? __( 'Page builder or plugin data', 'storage-sherpa' )
+					: __( 'Page builder or plugin data (possible match)', 'storage-sherpa' );
+				break;
+			case 'option':
+				$label = __( 'Theme or plugin setting', 'storage-sherpa' );
+				break;
+			default:
+				$label = ucfirst( str_replace( '_', ' ', $source ) );
+		}
+
+		$result['label'] = $label;
+
+		return $result;
+	}
+
 	private static function mark( $attachment_id, $status, $reason ) {
 		$attachment_id = (int) $attachment_id;
 
@@ -292,7 +406,7 @@ class SS_Orphan_Media_Scanner {
 	 * WooCommerce downloadable products store their files as a serialized
 	 * array of `array( 'name' => ..., 'file' => $url )` in `_downloadable_files`
 	 * postmeta — no attachment id is kept, only the URL, so
-	 * attachment_url_to_postid() is the only reliable way back to the
+	 * resolve_download_file_attachment_id() is the way back to the
 	 * attachment (a non-media-library URL simply won't resolve, which is
 	 * correct — there's no attachment to mark as used).
 	 */
@@ -319,7 +433,7 @@ class SS_Orphan_Media_Scanner {
 					continue;
 				}
 
-				$attachment_id = attachment_url_to_postid( $url );
+				$attachment_id = self::resolve_download_file_attachment_id( $url );
 
 				if ( $attachment_id ) {
 					self::mark( $attachment_id, 'used', 'woocommerce_downloadable_file:product#' . $row->post_id );
@@ -330,10 +444,11 @@ class SS_Orphan_Media_Scanner {
 
 	/**
 	 * Easy Digital Downloads stores its files the same shape, on `download`
-	 * posts under `edd_download_files` — EDD 3.0's file-selection UI writes
-	 * an explicit `attachment_id` when the file came from the media library,
-	 * so that's checked first; older entries and manually-entered URLs fall
-	 * back to attachment_url_to_postid() like the WooCommerce path above.
+	 * posts under `edd_download_files` — an explicit `attachment_id` is
+	 * checked first on the (rare) file rows that carry one, but EDD's own
+	 * file-picker generally only saves `file` (the URL) and `name`, so in
+	 * practice almost every row falls through to
+	 * resolve_download_file_attachment_id() below.
 	 */
 	private static function scan_edd_downloads() {
 		if ( ! defined( 'EDD_VERSION' ) ) {
@@ -367,13 +482,38 @@ class SS_Orphan_Media_Scanner {
 					continue;
 				}
 
-				$attachment_id = attachment_url_to_postid( $url );
+				$attachment_id = self::resolve_download_file_attachment_id( $url );
 
 				if ( $attachment_id ) {
 					self::mark( $attachment_id, 'used', 'edd_download_file:download#' . $row->post_id );
 				}
 			}
 		}
+	}
+
+	/**
+	 * attachment_url_to_postid() is a strict SQL lookup against the exact
+	 * stored URL — it misses a real media-library file whenever the saved
+	 * URL doesn't match byte-for-byte, which is common for downloadable-file
+	 * URLs specifically: an `&#038;`-encoded query string EDD/WooCommerce
+	 * appended, a scheme (http/https) mismatch, or a CDN/rewritten host.
+	 * (This is the actual cause behind a real attachment showing as
+	 * "unused" even though it's clearly attached to a download.) Falling
+	 * back to the same uploads-path matching every other source in this
+	 * scanner already uses — extract_url_ids() against self::$url_map — only
+	 * needs the "uploads/…something.ext" portion of the URL to resolve, so
+	 * it survives all of the above.
+	 */
+	private static function resolve_download_file_attachment_id( $url ) {
+		$attachment_id = attachment_url_to_postid( $url );
+
+		if ( $attachment_id ) {
+			return $attachment_id;
+		}
+
+		$ids = self::extract_url_ids( html_entity_decode( $url ) );
+
+		return $ids ? (int) reset( $ids ) : 0;
 	}
 
 	/**

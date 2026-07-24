@@ -19,8 +19,7 @@ class SS_Database_Page {
 
 		$summary = SS_Database_Cleanup::summary();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Database Cleanup', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Database Cleanup', 'storage-sherpa' ) ); ?>
 
 			<div class="ss-section">
 				<form id="ss-db-form">
@@ -60,7 +59,7 @@ class SS_Database_Page {
 					<span class="ss-status"></span>
 				</p>
 			</div>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<script>
 		document.getElementById('ss-db-clean').addEventListener('click', function () {
 			var btn = this;

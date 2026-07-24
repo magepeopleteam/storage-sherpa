@@ -392,3 +392,662 @@
 		outline-color: #f0f0f1;
 	}
 }
+
+/**
+ * ------------------------------------------------------------------------
+ * App shell — design language modeled on the LatePoint plugin's admin UI
+ * (sidebar + top bar app shell, rounded cards, soft shadows, blue accent,
+ * pill buttons/badges). Everything here is scoped under body.storage-sherpa-
+ * admin (added by SS_Admin::body_class()) so it can never leak onto another
+ * plugin's screen, and it only restyles the same markup/classes every admin
+ * page already renders (.wrap → SS_Admin::header()/footer(), native `.button`,
+ * `table.widefat`, `.ss-card` etc.) — no functionality changes.
+ * ------------------------------------------------------------------------
+ */
+
+body.storage-sherpa-admin {
+	--ss-primary: #1e7bff;
+	--ss-primary-hover: #3c8dff;
+	--ss-success: #2ebd6f;
+	--ss-success-hover: #42d083;
+	--ss-danger: #ef6b6b;
+	--ss-danger-hover: #fb7f7f;
+	--ss-headings: #1f222b;
+	--ss-body-text: #41444b;
+	--ss-faded: #788291;
+	--ss-border: #eef0f1;
+	--ss-border-strong: #d2d4d7;
+	--ss-sidebar-bg: #ffffff;
+	--ss-sidebar-active-bg: #edeff1;
+	--ss-content-bg: #f7f8f9;
+	--ss-card-bg: #ffffff;
+	--ss-radius-sm: 12px;
+	--ss-radius: 15px;
+	--ss-radius-lg: 20px;
+	--ss-radius-btn: 15px;
+	--ss-shadow: 0 5px 15px -5px rgba(115, 125, 146, 0.11), 0 1px 2px 0 rgba(160, 170, 185, 0.6);
+	--ss-font: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+	background: var(--ss-content-bg);
+	font-family: var(--ss-font);
+}
+
+/* Take over the full viewport, app-shell style — same approach LatePoint
+   uses for its own admin screens. Back to WordPress is always one click
+   away via the link in the top bar. */
+body.storage-sherpa-admin #adminmenumain,
+body.storage-sherpa-admin #wpadminbar,
+body.storage-sherpa-admin #wpfooter {
+	display: none;
+}
+
+body.storage-sherpa-admin.wp-toolbar {
+	margin-top: 0 !important;
+}
+
+body.storage-sherpa-admin #wpcontent,
+body.storage-sherpa-admin #wpfooter {
+	margin-left: 0;
+	padding-left: 0;
+}
+
+body.storage-sherpa-admin #wpbody-content {
+	padding-bottom: 0;
+}
+
+body.storage-sherpa-admin #wpbody-content > .notice,
+body.storage-sherpa-admin #wpbody-content > .updated,
+body.storage-sherpa-admin #wpbody-content > .error,
+body.storage-sherpa-admin #screen-meta,
+body.storage-sherpa-admin #screen-meta-links {
+	display: none;
+}
+
+body.storage-sherpa-admin #wpcontent {
+	min-height: 100vh;
+}
+
+/* -- Shell layout ------------------------------------------------------- */
+
+.storage-sherpa-admin .ss-app-wrap {
+	background: var(--ss-content-bg);
+	color: var(--ss-body-text);
+}
+
+.storage-sherpa-admin .ss-topbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 14px 24px;
+	background: #fff;
+	border-bottom: 1px solid var(--ss-border);
+}
+
+.storage-sherpa-admin .ss-topbar-brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 600;
+	font-size: 15px;
+	color: var(--ss-headings);
+}
+
+.storage-sherpa-admin .ss-topbar-brand .dashicons {
+	color: var(--ss-primary);
+	font-size: 20px;
+	width: 20px;
+	height: 20px;
+}
+
+.storage-sherpa-admin .ss-topbar-link {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	text-decoration: none;
+	color: var(--ss-faded);
+	font-size: 13px;
+	font-weight: 500;
+	padding: 7px 14px;
+	border-radius: var(--ss-radius-btn);
+}
+
+.storage-sherpa-admin .ss-topbar-link .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+}
+
+.storage-sherpa-admin .ss-topbar-link:hover,
+.storage-sherpa-admin .ss-topbar-link:focus {
+	background: var(--ss-sidebar-active-bg);
+	color: var(--ss-headings);
+}
+
+.storage-sherpa-admin .ss-body {
+	display: flex;
+	align-items: flex-start;
+}
+
+.storage-sherpa-admin .ss-sidebar {
+	flex: 0 0 216px;
+	width: 216px;
+	background: var(--ss-sidebar-bg);
+	border-right: 1px solid var(--ss-border);
+	min-height: calc(100vh - 54px);
+	display: flex;
+	flex-direction: column;
+	padding: 16px 10px;
+	position: sticky;
+	top: 0;
+	box-sizing: border-box;
+}
+
+.storage-sherpa-admin .ss-sidebar-menu {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.storage-sherpa-admin .ss-sidebar-menu-footer {
+	margin-top: auto;
+	padding-top: 12px;
+	margin-top: 12px;
+	border-top: 1px solid var(--ss-border);
+}
+
+.storage-sherpa-admin .ss-sidebar-menu li a {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 9px 12px;
+	border-radius: var(--ss-radius-btn);
+	color: #3a424b;
+	text-decoration: none;
+	font-size: 13.5px;
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.storage-sherpa-admin .ss-sidebar-menu li a .dashicons {
+	color: var(--ss-primary);
+	font-size: 17px;
+	width: 17px;
+	height: 17px;
+	flex: 0 0 17px;
+}
+
+.storage-sherpa-admin .ss-sidebar-menu li a:hover,
+.storage-sherpa-admin .ss-sidebar-menu li a:focus {
+	background: var(--ss-sidebar-active-bg);
+	color: var(--ss-headings);
+	outline: none;
+}
+
+.storage-sherpa-admin .ss-sidebar-menu li.is-active a {
+	background: var(--ss-sidebar-active-bg);
+	color: var(--ss-headings);
+	font-weight: 600;
+}
+
+.storage-sherpa-admin .ss-sidebar-menu li.is-active a .dashicons {
+	color: var(--ss-primary);
+}
+
+.storage-sherpa-admin .ss-main {
+	flex: 1;
+	min-width: 0;
+	padding: 28px 32px 60px;
+	box-sizing: border-box;
+}
+
+.storage-sherpa-admin .ss-page-header h1 {
+	font-size: 24px;
+	font-weight: 600;
+	color: var(--ss-headings);
+	margin: 0 0 20px;
+	line-height: 1.2;
+}
+
+@media (max-width: 782px) {
+	.storage-sherpa-admin .ss-body {
+		flex-direction: column;
+	}
+
+	.storage-sherpa-admin .ss-sidebar {
+		width: 100%;
+		flex: 0 0 auto;
+		min-height: 0;
+		position: static;
+		border-right: none;
+		border-bottom: 1px solid var(--ss-border);
+	}
+
+	.storage-sherpa-admin .ss-sidebar-menu {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.storage-sherpa-admin .ss-sidebar-menu-footer {
+		margin-top: 4px;
+		border-top: none;
+	}
+
+	.storage-sherpa-admin .ss-main {
+		padding: 20px 16px 40px;
+	}
+}
+
+/* -- Buttons -------------------------------------------------------------
+   Restyles the plain WP-core `.button`/`.button-primary` classes every page
+   already uses — no markup changes, same click handlers, same behavior. */
+
+.storage-sherpa-admin .button,
+.storage-sherpa-admin .button-secondary {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: auto;
+	padding: 7px 16px;
+	line-height: 1.4;
+	font-size: 13px;
+	font-weight: 500;
+	color: #252c39;
+	background: #f3f4f7;
+	border: 1px solid #e9eaed;
+	border-radius: var(--ss-radius-btn);
+	box-shadow: none;
+	text-shadow: none;
+	vertical-align: middle;
+}
+
+.storage-sherpa-admin .button:hover,
+.storage-sherpa-admin .button:focus {
+	background: #dcdee4;
+	border-color: #dcdee4;
+	color: #252c39;
+}
+
+.storage-sherpa-admin .button-primary,
+.storage-sherpa-admin .button.button-primary {
+	background: var(--ss-primary);
+	border-color: var(--ss-primary);
+	color: #fff;
+}
+
+.storage-sherpa-admin .button-primary:hover,
+.storage-sherpa-admin .button-primary:focus {
+	background: var(--ss-primary-hover);
+	border-color: var(--ss-primary-hover);
+	color: #fff;
+}
+
+.storage-sherpa-admin .button.button-small {
+	padding: 4px 12px;
+	font-size: 12px;
+}
+
+.storage-sherpa-admin .button:disabled,
+.storage-sherpa-admin .button[disabled] {
+	opacity: 0.5;
+}
+
+.storage-sherpa-admin .ss-btn-danger {
+	background: var(--ss-danger);
+	border-color: var(--ss-danger);
+	color: #fff;
+}
+
+.storage-sherpa-admin .ss-btn-danger:hover,
+.storage-sherpa-admin .ss-btn-danger:focus {
+	background: var(--ss-danger-hover);
+	border-color: var(--ss-danger-hover);
+	color: #fff;
+}
+
+/* -- Form controls -------------------------------------------------------- */
+
+.storage-sherpa-admin input[type="text"],
+.storage-sherpa-admin input[type="email"],
+.storage-sherpa-admin input[type="number"],
+.storage-sherpa-admin input[type="search"],
+.storage-sherpa-admin select,
+.storage-sherpa-admin textarea {
+	border-radius: var(--ss-radius-sm);
+	border: 1px solid #cecfd8;
+	background: #f1f3f7;
+	padding: 7px 12px;
+	box-shadow: none;
+	color: #32373c;
+}
+
+.storage-sherpa-admin input[type="text"]:focus,
+.storage-sherpa-admin input[type="email"]:focus,
+.storage-sherpa-admin input[type="number"]:focus,
+.storage-sherpa-admin input[type="search"]:focus,
+.storage-sherpa-admin select:focus,
+.storage-sherpa-admin textarea:focus {
+	border-color: var(--ss-primary);
+	box-shadow: 0 0 0 1px var(--ss-primary);
+	background: #fff;
+}
+
+.storage-sherpa-admin table.form-table th {
+	color: var(--ss-headings);
+	font-weight: 600;
+	padding: 16px 16px 16px 0;
+}
+
+.storage-sherpa-admin table.form-table td {
+	padding: 12px 16px;
+}
+
+/* -- Tables ---------------------------------------------------------------- */
+
+.storage-sherpa-admin table.widefat {
+	background: var(--ss-card-bg);
+	border: 1px solid var(--ss-border);
+	border-radius: var(--ss-radius);
+	overflow: hidden;
+	box-shadow: var(--ss-shadow);
+}
+
+.storage-sherpa-admin table.widefat thead th,
+.storage-sherpa-admin table.widefat thead td {
+	background: #fff;
+	color: var(--ss-faded);
+	text-transform: uppercase;
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	font-weight: 600;
+	border-bottom: 1px solid var(--ss-border);
+	padding: 12px 16px;
+}
+
+.storage-sherpa-admin table.widefat td,
+.storage-sherpa-admin table.widefat th {
+	border-color: var(--ss-border);
+	padding: 12px 16px;
+}
+
+.storage-sherpa-admin table.widefat.striped > tbody > tr:nth-child(odd) {
+	background: #fbfbfc;
+}
+
+.storage-sherpa-admin table.widefat > tbody > tr:hover {
+	background: #f3f4f7;
+}
+
+.storage-sherpa-admin .tablenav {
+	margin: 10px 0;
+}
+
+.storage-sherpa-admin .subsubsub {
+	margin: 0 0 16px;
+}
+
+.storage-sherpa-admin .subsubsub a {
+	color: var(--ss-faded);
+}
+
+.storage-sherpa-admin .subsubsub a.current {
+	color: var(--ss-headings);
+	font-weight: 600;
+	border: none;
+}
+
+/* -- Cards / panels / sections --------------------------------------------
+   Restyles the .ss-card/.ss-panel/.ss-section classes already used across
+   the Dashboard, Reports, and every list-table screen. */
+
+.storage-sherpa-admin .ss-card,
+.storage-sherpa-admin .ss-panel,
+.storage-sherpa-admin .ss-section {
+	background: var(--ss-card-bg);
+	border: none;
+	border-radius: var(--ss-radius);
+	box-shadow: var(--ss-shadow);
+	padding: 22px 24px;
+}
+
+.storage-sherpa-admin .ss-panel h2,
+.storage-sherpa-admin .ss-section h2 {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--ss-headings);
+	margin-top: 0;
+}
+
+.storage-sherpa-admin .ss-card-label {
+	color: var(--ss-faded);
+}
+
+.storage-sherpa-admin .ss-card-value {
+	color: var(--ss-headings);
+}
+
+/* -- Badges ----------------------------------------------------------------- */
+
+.storage-sherpa-admin .ss-badge {
+	border-radius: 20px;
+	padding: 3px 10px;
+	font-weight: 600;
+}
+
+/* -- Tabs (Media Findings) ---------------------------------------------------
+   Underline-style tabs with a gradient active indicator, matching LatePoint's
+   os-page-tabs pattern. */
+
+.storage-sherpa-admin .ss-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px;
+	border-bottom: 1px solid var(--ss-border);
+	margin: 0 0 20px;
+}
+
+.storage-sherpa-admin .ss-tabs a {
+	padding: 10px 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	color: var(--ss-faded);
+	font-size: 14px;
+	font-weight: 500;
+	position: relative;
+}
+
+.storage-sherpa-admin .ss-tabs a:hover {
+	color: var(--ss-headings);
+}
+
+.storage-sherpa-admin .ss-tabs a.is-active {
+	color: var(--ss-headings);
+	font-weight: 600;
+	background: transparent;
+}
+
+.storage-sherpa-admin .ss-tabs a.is-active::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: -1px;
+	height: 3px;
+	border-radius: 4px;
+	background-image: linear-gradient(45deg, #702fdb, #ffc390);
+}
+
+/* -- Notices ------------------------------------------------------------------ */
+
+.storage-sherpa-admin .notice {
+	border-radius: var(--ss-radius-sm);
+	box-shadow: var(--ss-shadow);
+}
+
+/* -- Dark mode -------------------------------------------------------------- */
+
+@media (prefers-color-scheme: dark) {
+	body.storage-sherpa-admin {
+		--ss-content-bg: #16171a;
+		--ss-card-bg: #1e1e1e;
+		--ss-sidebar-bg: #1a1b1e;
+		--ss-sidebar-active-bg: #2a2b30;
+		--ss-headings: #f0f0f1;
+		--ss-body-text: #d3d5d9;
+		--ss-faded: #9a9fa8;
+		--ss-border: #303136;
+		--ss-border-strong: #3c3c3c;
+	}
+
+	.storage-sherpa-admin .ss-topbar {
+		background: var(--ss-card-bg);
+	}
+
+	.storage-sherpa-admin .ss-sidebar-menu li a {
+		color: #d3d5d9;
+	}
+
+	.storage-sherpa-admin .button,
+	.storage-sherpa-admin .button-secondary {
+		background: #2a2b30;
+		border-color: #3c3c3c;
+		color: #f0f0f1;
+	}
+
+	.storage-sherpa-admin .button:hover,
+	.storage-sherpa-admin .button:focus {
+		background: #35363c;
+		border-color: #45464c;
+	}
+
+	.storage-sherpa-admin input[type="text"],
+	.storage-sherpa-admin input[type="email"],
+	.storage-sherpa-admin input[type="number"],
+	.storage-sherpa-admin input[type="search"],
+	.storage-sherpa-admin select,
+	.storage-sherpa-admin textarea {
+		background: #26272c;
+		border-color: #3c3c3c;
+		color: #f0f0f1;
+	}
+
+	.storage-sherpa-admin table.widefat.striped > tbody > tr:nth-child(odd) {
+		background: #232427;
+	}
+
+	.storage-sherpa-admin table.widefat > tbody > tr:hover {
+		background: #2a2b30;
+	}
+}
+
+/**
+ * ------------------------------------------------------------------------
+ * Media Findings screen — AJAX file-name search, selection bar, chunked
+ * bulk-delete progress. Scoped to .storage-sherpa-admin like everything
+ * else above; only rendered on the Media Findings screen.
+ * ------------------------------------------------------------------------
+ */
+
+.storage-sherpa-admin .ss-media-search-w {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+	background: #f1f3f7;
+	border: 1px solid #cecfd8;
+	border-radius: var(--ss-radius-sm, 12px);
+	padding: 0 12px;
+}
+
+.storage-sherpa-admin .ss-media-search-w .dashicons {
+	color: var(--ss-faded, #788291);
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+}
+
+.storage-sherpa-admin .ss-media-search-w input[type="search"] {
+	border: none;
+	background: transparent;
+	padding: 7px 0;
+	min-width: 220px;
+	box-shadow: none;
+}
+
+.storage-sherpa-admin .ss-media-search-w input[type="search"]:focus {
+	box-shadow: none;
+	background: transparent;
+}
+
+.storage-sherpa-admin .ss-media-selection-bar {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	background: var(--ss-card-bg, #fff);
+	border: 1px solid var(--ss-border, #eef0f1);
+	border-radius: var(--ss-radius-sm, 12px);
+	padding: 10px 16px;
+	margin: 0 0 12px;
+	font-size: 13px;
+}
+
+.storage-sherpa-admin .ss-media-selection-bar #ss-media-selection-text {
+	font-weight: 600;
+	color: var(--ss-headings, #1f222b);
+}
+
+.storage-sherpa-admin .ss-media-selection-bar .button-link {
+	color: var(--ss-primary, #1e7bff);
+	text-decoration: none;
+}
+
+.storage-sherpa-admin .ss-media-selection-bar .button-link:hover {
+	text-decoration: underline;
+}
+
+.storage-sherpa-admin .ss-media-progress {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	background: var(--ss-card-bg, #fff);
+	border: 1px solid var(--ss-border, #eef0f1);
+	border-radius: var(--ss-radius-sm, 12px);
+	padding: 10px 16px;
+	margin: 0 0 12px;
+	font-size: 13px;
+}
+
+.storage-sherpa-admin .ss-media-progress-track {
+	flex: 1;
+	height: 8px;
+	border-radius: 999px;
+	background: var(--ss-sidebar-active-bg, #edeff1);
+	overflow: hidden;
+}
+
+.storage-sherpa-admin .ss-media-progress-fill {
+	height: 100%;
+	width: 0;
+	border-radius: 999px;
+	background: var(--ss-primary, #1e7bff);
+	transition: width 0.2s ease;
+}
+
+.storage-sherpa-admin .ss-media-progress-label {
+	white-space: nowrap;
+	color: var(--ss-faded, #788291);
+}
+
+.storage-sherpa-admin #ss-media-table-region .subsubsub {
+	margin-top: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+	.storage-sherpa-admin .ss-media-search-w {
+		background: #26272c;
+		border-color: #3c3c3c;
+	}
+}

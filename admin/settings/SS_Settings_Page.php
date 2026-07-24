@@ -21,8 +21,7 @@ class SS_Settings_Page {
 		$settings = storage_sherpa_get_settings();
 		$rules    = SS_Ignore_Rules::all();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Storage Sherpa Settings', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Storage Sherpa Settings', 'storage-sherpa' ) ); ?>
 
 			<div class="ss-section">
 				<h2><?php esc_html_e( 'General & Recovery', 'storage-sherpa' ); ?></h2>
@@ -155,7 +154,7 @@ class SS_Settings_Page {
 					</tbody>
 				</table>
 			</div>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<script>
 		document.getElementById('ss-settings-save').addEventListener('click', function () {
 			var btn = this;

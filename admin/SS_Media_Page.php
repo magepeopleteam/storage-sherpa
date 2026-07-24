@@ -56,7 +56,7 @@ class SS_Media_Findings_Table extends WP_List_Table {
 	 * over from switching tabs (e.g. "used" while on the Large Files tab)
 	 * silently falls back to "All" instead of returning an empty table.
 	 */
-	private function current_status_filter() {
+	public function current_status_filter() {
 		$requested = isset( $_GET['status'] ) ? sanitize_key( $_GET['status'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter.
 		$counts    = SS_Media_Findings::counts( $this->finding_type );
 
@@ -65,12 +65,21 @@ class SS_Media_Findings_Table extends WP_List_Table {
 
 	public function get_columns() {
 		$columns = array(
-			'cb'     => '<input type="checkbox" data-ss-select-all />',
-			'file'   => __( 'File', 'storage-sherpa' ),
-			'status' => __( 'Status', 'storage-sherpa' ),
-			'reason' => __( 'Reason', 'storage-sherpa' ),
-			'size'   => __( 'Size', 'storage-sherpa' ),
+			'cb'   => '<input type="checkbox" data-ss-select-all />',
+			'file' => __( 'File', 'storage-sherpa' ),
 		);
+
+		// Large Files is the one tab where knowing exactly where a big file
+		// lives (it can be anywhere under wp-content, not just uploads — see
+		// SS_Large_File_Scanner) is worth its own column rather than just the
+		// basename the File column already shows.
+		if ( SS_Media_Findings::TYPE_LARGE === $this->finding_type ) {
+			$columns['path'] = __( 'Path', 'storage-sherpa' );
+		}
+
+		$columns['status'] = __( 'Status', 'storage-sherpa' );
+		$columns['reason'] = __( 'Reason', 'storage-sherpa' );
+		$columns['size']   = __( 'Size', 'storage-sherpa' );
 
 		// Confidence only means anything for orphan findings — every other
 		// finding type leaves the column at its default 0 and would just
@@ -124,10 +133,21 @@ class SS_Media_Findings_Table extends WP_List_Table {
 		return $views;
 	}
 
+	/**
+	 * The current file-name search term — a single read-only source both
+	 * prepare_items() and SS_Media_Page::render() (for the search input's
+	 * value and the AJAX endpoints' filter args) pull from.
+	 */
+	public function current_search() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter, not a state change.
+		return isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+	}
+
 	public function prepare_items() {
 		$per_page = 20;
 		$paged    = max( 1, (int) ( $_GET['paged'] ?? 1 ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only pagination.
 		$status   = $this->current_status_filter();
+		$search   = $this->current_search();
 
 		$this->_column_headers = array( $this->get_columns(), array(), array() );
 
@@ -135,15 +155,13 @@ class SS_Media_Findings_Table extends WP_List_Table {
 			$this->finding_type,
 			array(
 				'status' => $status,
+				'search' => $search,
 				'limit'  => $per_page,
 				'offset' => ( $paged - 1 ) * $per_page,
 			)
 		);
 
-		$counts = SS_Media_Findings::counts( $this->finding_type );
-		$total  = $status && isset( $counts[ $status ] )
-			? $counts[ $status ]['count']
-			: array_sum( wp_list_pluck( $counts, 'count' ) );
+		$total = SS_Media_Findings::count_matching( $this->finding_type, array( 'status' => $status, 'search' => $search ) );
 
 		$this->items = $rows;
 		$this->set_pagination_args(
@@ -190,12 +208,78 @@ class SS_Media_Findings_Table extends WP_List_Table {
 		);
 	}
 
+	/**
+	 * Large Files walks all of wp-content, not just uploads (see
+	 * SS_Large_File_Scanner), so the path is worth showing on its own —
+	 * relative to wp-content, matching how the Log Cleaner screen already
+	 * displays paths, rather than the full absolute server path.
+	 */
+	public function column_path( $item ) {
+		if ( ! $item->file_path ) {
+			return '';
+		}
+
+		$relative = str_replace(
+			storage_sherpa_normalize_path( WP_CONTENT_DIR ),
+			'',
+			storage_sherpa_normalize_path( $item->file_path )
+		);
+
+		return '<code>' . esc_html( $relative ) . '</code>';
+	}
+
 	public function column_status( $item ) {
 		return '<span class="ss-badge ss-badge-' . esc_attr( $item->status ) . '">' . esc_html( $item->status ) . '</span>';
 	}
 
+	/**
+	 * For "used"/"possibly_used" orphan findings, this is "where" — a
+	 * friendly label (Featured image, EDD download file, ACF field, …) plus,
+	 * when the reason names a post, a link to it, rather than the raw
+	 * internal reason string (e.g. "edd_download_file:download#123").
+	 * Every other status (unused, duplicate, large, broken, …) keeps the
+	 * plain reason text exactly as before — those never carry a post
+	 * reference in this shape.
+	 */
 	public function column_reason( $item ) {
-		return esc_html( $item->reason );
+		if ( ! in_array( $item->status, array( 'used', 'possibly_used' ), true ) || ! class_exists( 'SS_Orphan_Media_Scanner' ) ) {
+			return esc_html( $item->reason );
+		}
+
+		$described = SS_Orphan_Media_Scanner::describe_reason( $item->reason );
+
+		if ( ! $described['label'] ) {
+			return esc_html( $item->reason );
+		}
+
+		if ( ! $described['post_id'] ) {
+			return esc_html( $described['label'] );
+		}
+
+		$post = get_post( $described['post_id'] );
+
+		if ( ! $post ) {
+			// The reason was recorded against a post that's since been
+			// deleted or trashed — still say where, just without a dead link.
+			return esc_html(
+				sprintf(
+					/* translators: 1: usage location label, 2: post ID */
+					__( '%1$s (post #%2$d, no longer exists)', 'storage-sherpa' ),
+					$described['label'],
+					$described['post_id']
+				)
+			);
+		}
+
+		$title     = get_the_title( $post );
+		$title     = $title ? $title : sprintf( '#%d', $post->ID );
+		$edit_link = get_edit_post_link( $post );
+
+		if ( ! $edit_link ) {
+			return esc_html( $described['label'] ) . ' — ' . esc_html( $title );
+		}
+
+		return esc_html( $described['label'] ) . ' — <a href="' . esc_url( $edit_link ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( $title ) . '</a>';
 	}
 
 	/**
@@ -245,9 +329,10 @@ class SS_Media_Page {
 
 		$table = new SS_Media_Findings_Table( $finding_type );
 		$table->prepare_items();
+		$search        = $table->current_search();
+		$status_filter = $table->current_status_filter();
 		?>
-		<div class="wrap storage-sherpa-wrap">
-			<h1><?php esc_html_e( 'Media Findings', 'storage-sherpa' ); ?></h1>
+		<?php SS_Admin::header( __( 'Media Findings', 'storage-sherpa' ) ); ?>
 
 			<nav class="ss-tabs">
 				<?php foreach ( $tabs as $slug => $tab ) : ?>
@@ -256,8 +341,6 @@ class SS_Media_Page {
 					</a>
 				<?php endforeach; ?>
 			</nav>
-
-			<?php $table->views(); ?>
 
 			<?php if ( 'orphan' === $active_tab ) : ?>
 				<?php
@@ -288,20 +371,59 @@ class SS_Media_Page {
 					<?php esc_html_e( 'Scan Now', 'storage-sherpa' ); ?>
 				</button>
 				<span class="ss-status"></span>
+
+				<form id="ss-media-search-form" class="ss-media-search-w" method="get">
+					<input type="hidden" name="page" value="storage-sherpa-media" />
+					<input type="hidden" name="tab" value="<?php echo esc_attr( $active_tab ); ?>" />
+					<?php if ( '' !== $status_filter ) : ?>
+						<input type="hidden" name="status" value="<?php echo esc_attr( $status_filter ); ?>" />
+					<?php endif; ?>
+					<span class="dashicons dashicons-search" aria-hidden="true"></span>
+					<input
+						type="search"
+						id="ss-media-search"
+						name="s"
+						value="<?php echo esc_attr( $search ); ?>"
+						placeholder="<?php esc_attr_e( 'Search by file name…', 'storage-sherpa' ); ?>"
+					/>
+					<button type="submit" class="screen-reader-text"><?php esc_html_e( 'Search', 'storage-sherpa' ); ?></button>
+				</form>
 			</div>
 
-			<form data-ss-bulk-action="/storage-sherpa/v1/media/trash">
-				<div class="tablenav top">
-					<div class="alignleft actions">
-						<select name="ss_bulk_action">
-							<option value="-1"><?php esc_html_e( 'Bulk actions', 'storage-sherpa' ); ?></option>
-							<option value="trash"><?php esc_html_e( 'Move to Safe Trash', 'storage-sherpa' ); ?></option>
-						</select>
-						<input type="submit" class="button action" value="<?php esc_attr_e( 'Apply', 'storage-sherpa' ); ?>" />
+			<div id="ss-media-selection-bar" class="ss-media-selection-bar" hidden>
+				<span id="ss-media-selection-text"></span>
+				<button type="button" id="ss-media-select-all-matching" class="button-link" hidden></button>
+				<button type="button" id="ss-media-clear-selection" class="button-link"><?php esc_html_e( 'Clear selection', 'storage-sherpa' ); ?></button>
+			</div>
+
+			<div id="ss-media-progress" class="ss-media-progress" hidden role="status" aria-live="polite">
+				<div class="ss-media-progress-track"><div class="ss-media-progress-fill"></div></div>
+				<span id="ss-media-progress-label" class="ss-media-progress-label"></span>
+				<button type="button" id="ss-media-progress-cancel" class="button-link"><?php esc_html_e( 'Cancel', 'storage-sherpa' ); ?></button>
+			</div>
+
+			<div
+				id="ss-media-table-region"
+				data-tab="<?php echo esc_attr( $active_tab ); ?>"
+				data-status="<?php echo esc_attr( $status_filter ); ?>"
+				data-search="<?php echo esc_attr( $search ); ?>"
+				data-total-items="<?php echo (int) $table->get_pagination_arg( 'total_items' ); ?>"
+			>
+				<?php $table->views(); ?>
+
+				<form data-ss-bulk-trash="/storage-sherpa/v1/media/trash" id="ss-media-bulk-form">
+					<div class="tablenav top">
+						<div class="alignleft actions">
+							<select name="ss_bulk_action">
+								<option value="-1"><?php esc_html_e( 'Bulk actions', 'storage-sherpa' ); ?></option>
+								<option value="trash"><?php esc_html_e( 'Move to Safe Trash', 'storage-sherpa' ); ?></option>
+							</select>
+							<input type="submit" class="button action" value="<?php esc_attr_e( 'Apply', 'storage-sherpa' ); ?>" />
+						</div>
 					</div>
-				</div>
-				<?php $table->display(); ?>
-			</form>
+					<?php $table->display(); ?>
+				</form>
+			</div>
 
 			<?php if ( class_exists( 'SS_Break_Test' ) ) : ?>
 				<?php $running_tests = SS_Break_Test::list_running(); ?>
@@ -337,7 +459,7 @@ class SS_Media_Page {
 					</div>
 				<?php endif; ?>
 			<?php endif; ?>
-		</div>
+		<?php SS_Admin::footer(); ?>
 		<?php
 	}
 }
