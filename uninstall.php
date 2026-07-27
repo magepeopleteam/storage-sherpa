@@ -26,6 +26,7 @@ foreach ( $tables as $table ) {
 
 delete_option( 'storage_sherpa_settings' );
 delete_option( 'storage_sherpa_db_version' );
+delete_option( 'storage_sherpa_orphan_scan_incomplete' );
 
 $trash_dir = trailingslashit( WP_CONTENT_DIR ) . 'storage-sherpa-trash';
 

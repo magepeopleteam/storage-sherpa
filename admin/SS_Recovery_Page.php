@@ -30,15 +30,20 @@ class SS_Recovery_Page {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter, not a state change.
 		$search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
 
-		$total_items = SS_Trash::count_matching( array( 'search' => $search ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter, not a state change.
+		$requested_file_type = isset( $_GET['file_type'] ) ? sanitize_key( $_GET['file_type'] ) : '';
+		$file_type            = in_array( $requested_file_type, array_keys( SS_Filetype_Analyzer::labels() ), true ) ? $requested_file_type : '';
+
+		$total_items = SS_Trash::count_matching( array( 'search' => $search, 'file_type' => $file_type ) );
 		$total_pages = max( 1, (int) ceil( $total_items / $per_page ) );
 		$paged       = min( $paged, $total_pages );
 
 		$items = SS_Trash::query(
 			array(
-				'search' => $search,
-				'limit'  => $per_page,
-				'offset' => ( $paged - 1 ) * $per_page,
+				'search'    => $search,
+				'file_type' => $file_type,
+				'limit'     => $per_page,
+				'offset'    => ( $paged - 1 ) * $per_page,
 			)
 		);
 		$settings = storage_sherpa_get_settings();
@@ -90,7 +95,7 @@ class SS_Recovery_Page {
 				<button type="button" id="ss-recovery-progress-cancel" class="button-link"><?php esc_html_e( 'Cancel', 'storage-sherpa' ); ?></button>
 			</div>
 
-			<div id="ss-recovery-table-region" data-search="<?php echo esc_attr( $search ); ?>" data-total-items="<?php echo (int) $total_items; ?>">
+			<div id="ss-recovery-table-region" data-search="<?php echo esc_attr( $search ); ?>" data-file-type="<?php echo esc_attr( $file_type ); ?>" data-total-items="<?php echo (int) $total_items; ?>">
 				<form id="ss-recovery-bulk-form" data-ss-bulk-recovery="1">
 					<div class="tablenav top">
 						<div class="alignleft actions ss-tablenav-actions">
@@ -100,6 +105,16 @@ class SS_Recovery_Page {
 								<option value="delete"><?php esc_html_e( 'Delete Permanently', 'storage-sherpa' ); ?></option>
 							</select>
 							<input type="submit" class="button action ss-tablenav-select" value="<?php esc_attr_e( 'Apply', 'storage-sherpa' ); ?>" />
+						</div>
+						<div class="alignleft actions ss-tablenav-actions">
+							<select id="ss-recovery-filetype" name="file_type" class="ss-tablenav-select" aria-label="<?php esc_attr_e( 'Filter by file type', 'storage-sherpa' ); ?>">
+								<option value=""><?php esc_html_e( 'All file types', 'storage-sherpa' ); ?></option>
+								<?php foreach ( SS_Filetype_Analyzer::labels() as $key => $label ) : ?>
+									<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $file_type, $key ); ?>>
+										<?php echo esc_html( $label ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
 						</div>
 						<?php SS_Admin::render_pagination( $total_items, $paged, $total_pages ); ?>
 					</div>

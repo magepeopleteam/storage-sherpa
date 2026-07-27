@@ -1,10 +1,11 @@
 /**
  * Recovery Center screen only (enqueued conditionally by
  * SS_Admin::enqueue_assets() when $plugin_page === 'storage-sherpa-recovery').
- * Mirrors storage-sherpa-media.js's pattern closely — AJAX search, checkbox
- * selection with "select all N items matching this filter", chunked bulk
- * actions with a progress bar — extended here for TWO bulk actions
- * (Restore, Delete Permanently) instead of one.
+ * Mirrors storage-sherpa-media.js's pattern closely — AJAX search, a
+ * file-type filter, checkbox selection with "select all N items matching
+ * this filter" (which respects both the search term and file-type filter),
+ * chunked bulk actions with a progress bar — extended here for TWO bulk
+ * actions (Restore, Delete Permanently) instead of one.
  *
  * No build step, same plain-ES2017 style as storage-sherpa-admin.js.
  */
@@ -39,6 +40,10 @@
 
 	function currentSearch() {
 		return region.getAttribute( 'data-search' ) || '';
+	}
+
+	function currentFileType() {
+		return region.getAttribute( 'data-file-type' ) || '';
 	}
 
 	function totalItems() {
@@ -168,6 +173,7 @@
 				}
 
 				region.setAttribute( 'data-search', fresh.getAttribute( 'data-search' ) || '' );
+				region.setAttribute( 'data-file-type', fresh.getAttribute( 'data-file-type' ) || '' );
 				region.setAttribute( 'data-total-items', fresh.getAttribute( 'data-total-items' ) || '0' );
 				region.innerHTML = fresh.innerHTML;
 
@@ -194,6 +200,21 @@
 			reloadTableRegion( buildRegionUrl( { s: searchInput.value, paged: '' } ) );
 		} );
 	}
+
+	// Delegated on region (not bound directly to the <select>) — the
+	// file-type filter lives inside the table region's own tablenav, which
+	// gets replaced wholesale on every AJAX search/filter swap. A listener
+	// bound to the original select node would stop firing the moment that
+	// node is replaced; region itself is never replaced (only its
+	// innerHTML), so delegating here survives every swap without needing to
+	// rebind anything. Mirrors storage-sherpa-media.js's identical pattern.
+	region.addEventListener( 'change', function ( e ) {
+		var select = e.target.closest( '#ss-recovery-filetype' );
+		if ( ! select ) {
+			return;
+		}
+		reloadTableRegion( buildRegionUrl( { file_type: select.value, paged: '' } ) );
+	} );
 
 	// -----------------------------------------------------------------
 	// Chunked bulk restore / delete with a progress bar
@@ -305,7 +326,10 @@
 				}
 
 				apiFetch(
-					'/storage-sherpa/v1/trash/ids?' + new URLSearchParams( { search: currentSearch() } ).toString()
+					'/storage-sherpa/v1/trash/ids?' + new URLSearchParams( {
+						search: currentSearch(),
+						file_type: currentFileType(),
+					} ).toString()
 				).then( function ( res ) {
 					runChunked( res.ids, action );
 				} );

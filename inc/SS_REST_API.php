@@ -697,9 +697,11 @@ class SS_REST_API {
 			array(
 				'items' => SS_Trash::query(
 					array(
-						'limit'  => (int) ( $request->get_param( 'limit' ) ?: 100 ),
-						'offset' => (int) ( $request->get_param( 'offset' ) ?: 0 ),
-						'module' => $request->get_param( 'module' ) ?: '',
+						'limit'     => (int) ( $request->get_param( 'limit' ) ?: 100 ),
+						'offset'    => (int) ( $request->get_param( 'offset' ) ?: 0 ),
+						'module'    => $request->get_param( 'module' ) ?: '',
+						'search'    => $request->get_param( 'search' ) ?: '',
+						'file_type' => $request->get_param( 'file_type' ) ?: '',
 					)
 				),
 				'total_size' => SS_Trash::total_trash_size(),
@@ -718,14 +720,15 @@ class SS_REST_API {
 	}
 
 	/**
-	 * Every trash id matching the current search filter, unpaginated —
-	 * powers the Recovery Center screen's "select all N items matching this
-	 * filter" bulk action, same shape as media_ids() above.
+	 * Every trash id matching the current search/file-type filter,
+	 * unpaginated — powers the Recovery Center screen's "select all N items
+	 * matching this filter" bulk action, same shape as media_ids() above.
 	 */
 	public static function trash_ids( WP_REST_Request $request ) {
 		$ids = SS_Trash::ids(
 			array(
-				'search' => $request->get_param( 'search' ) ?: '',
+				'search'    => $request->get_param( 'search' ) ?: '',
+				'file_type' => $request->get_param( 'file_type' ) ?: '',
 			)
 		);
 

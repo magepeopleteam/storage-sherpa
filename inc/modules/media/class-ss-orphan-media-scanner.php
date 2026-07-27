@@ -25,6 +25,20 @@
  * agree it's in use, and a high band for "unused" that's tempered by
  * upload recency (a file uploaded 3 days ago is more likely "not placed
  * yet" than truly orphaned).
+ *
+ * Time-budget completeness: scan_acf_fields()/scan_beaver_builder()/
+ * scan_post_content()/scan_generic_meta_and_options() each walk their table
+ * in ID order under a shared time budget (25s by default, whether run via
+ * the Media Findings "Scan Now" button or a background/cron step) and can
+ * run out of time before reaching every row on a large site — post
+ * revisions in particular can outnumber real posts many times over, since
+ * every edit duplicates the full post_content. scan() tracks whether every
+ * sub-scan actually finished; if any didn't, carry_forward_previous_used_
+ * findings() re-applies this scanner's own last confirmed "used" verdicts
+ * so an incomplete run only ever adds findings, never regresses a real
+ * reference back to "unused" purely because this pass didn't get there.
+ * `storage_sherpa_orphan_scan_incomplete` (self::INCOMPLETE_OPTION) records
+ * whether the most recent run was partial, so the admin screen can say so.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -38,6 +52,17 @@ class SS_Orphan_Media_Scanner {
 
 	/** @var array attachment_id => array('status' => used|possibly_used, 'reason' => string) */
 	private static $found = array();
+
+	/**
+	 * Set (via update_option()) at the end of every scan() to whether that
+	 * run actually finished walking every post/postmeta/option row within
+	 * its time budget. See the completeness plumbing in scan() and
+	 * carry_forward_previous_used_findings() for why this matters: a run
+	 * that times out partway through must never let an attachment that was
+	 * confirmed "used" by an earlier, complete pass flip back to "unused"
+	 * just because this run didn't get far enough to re-find that reference.
+	 */
+	const INCOMPLETE_OPTION = 'storage_sherpa_orphan_scan_incomplete';
 
 	public static function run_scan() {
 		$rows = self::scan();
@@ -57,13 +82,51 @@ class SS_Orphan_Media_Scanner {
 		self::scan_edd_downloads();
 		self::scan_theme_options();
 		self::scan_widgets();
-		self::scan_acf_fields( $start, $time_budget * 0.25 );
-		self::scan_page_builders( $start, $time_budget * 0.25 );
+
+		$complete = self::scan_acf_fields( $start, $time_budget * 0.25 );
+		$complete = self::scan_page_builders( $start, $time_budget * 0.25 ) && $complete;
 		self::scan_theme_files();
-		self::scan_post_content( $start, $time_budget * 0.5 );
-		self::scan_generic_meta_and_options( $start, $time_budget );
+		$complete = self::scan_post_content( $start, $time_budget * 0.5 ) && $complete;
+		$complete = self::scan_generic_meta_and_options( $start, $time_budget ) && $complete;
+
+		if ( ! $complete ) {
+			self::carry_forward_previous_used_findings();
+		}
+
+		update_option( self::INCOMPLETE_OPTION, ! $complete, false );
 
 		return self::build_results();
+	}
+
+	/**
+	 * Only called when this run's time-budgeted sub-scans (ACF, Beaver
+	 * Builder, post content, generic meta/options) didn't finish walking
+	 * every row — i.e. some posts/postmeta/options genuinely went
+	 * unexamined this run, not "examined and found nothing". Re-applies
+	 * every attachment this scanner previously confirmed `used` so an
+	 * incomplete pass can only ever add new findings, never silently
+	 * regress a real, previously-confirmed reference back to "unused".
+	 * Skipped entirely for a run that completes a full pass, so genuine
+	 * used → unused transitions (the reference was actually removed from
+	 * the post) still converge correctly once a full scan finishes.
+	 */
+	private static function carry_forward_previous_used_findings() {
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT attachment_id, reason FROM {$wpdb->prefix}ss_media_findings WHERE finding_type = %s AND status = 'used'",
+				SS_Media_Findings::TYPE_ORPHAN
+			)
+		); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		foreach ( (array) $rows as $row ) {
+			if ( isset( self::$found[ (int) $row->attachment_id ] ) ) {
+				continue;
+			}
+
+			self::mark( $row->attachment_id, 'used', $row->reason );
+		}
 	}
 
 	/**
@@ -576,7 +639,7 @@ class SS_Orphan_Media_Scanner {
 	 */
 	private static function scan_acf_fields( $start, $budget ) {
 		if ( ! class_exists( 'ACF' ) && ! function_exists( 'acf_get_field' ) ) {
-			return;
+			return true;
 		}
 
 		global $wpdb;
@@ -599,7 +662,7 @@ class SS_Orphan_Media_Scanner {
 			); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 			if ( empty( $rows ) ) {
-				break;
+				return true;
 			}
 
 			foreach ( $rows as $row ) {
@@ -617,6 +680,8 @@ class SS_Orphan_Media_Scanner {
 				}
 			}
 		}
+
+		return false;
 	}
 
 	private static function extract_acf_attachment_ids( $value ) {
@@ -656,7 +721,7 @@ class SS_Orphan_Media_Scanner {
 		self::scan_elementor();
 		self::scan_divi_galleries();
 		self::scan_wpbakery();
-		self::scan_beaver_builder( $start, $budget );
+		return self::scan_beaver_builder( $start, $budget );
 	}
 
 	private static function scan_elementor() {
@@ -783,7 +848,7 @@ class SS_Orphan_Media_Scanner {
 			); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 			if ( empty( $rows ) ) {
-				break;
+				return true;
 			}
 
 			foreach ( $rows as $row ) {
@@ -796,6 +861,8 @@ class SS_Orphan_Media_Scanner {
 				}
 			}
 		}
+
+		return false;
 	}
 
 	private static function extract_beaver_builder_ids( $node ) {
@@ -902,6 +969,12 @@ class SS_Orphan_Media_Scanner {
 	 * editor, Gutenberg blocks (image URLs + wp-image-N classes appear
 	 * directly in the saved HTML), the [gallery] shortcode, and nav menu
 	 * items (nav_menu_item is a post type, so it's included here too).
+	 * `post_type != 'revision'` matters here specifically: revisions
+	 * duplicate their parent post's entire content on every save, so on a
+	 * site with any editing history they can easily outnumber real posts by
+	 * 10-20x — burning through this scan's time budget re-checking content
+	 * the parent post row already covers, and starving the real (often more
+	 * recent, higher-ID) posts of a chance to be scanned at all this run.
 	 */
 	private static function scan_post_content( $start, $budget ) {
 		global $wpdb;
@@ -912,14 +985,14 @@ class SS_Orphan_Media_Scanner {
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
 					"SELECT ID, post_content, post_type FROM {$wpdb->posts}
-					 WHERE ID > %d AND post_status != 'auto-draft' AND post_content != ''
+					 WHERE ID > %d AND post_status != 'auto-draft' AND post_type != 'revision' AND post_content != ''
 					 ORDER BY ID ASC LIMIT 200",
 					$last_id
 				)
 			); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 			if ( empty( $rows ) ) {
-				break;
+				return true;
 			}
 
 			foreach ( $rows as $row ) {
@@ -942,6 +1015,8 @@ class SS_Orphan_Media_Scanner {
 				}
 			}
 		}
+
+		return false;
 	}
 
 	/**
@@ -957,7 +1032,8 @@ class SS_Orphan_Media_Scanner {
 		$like_uploads = '%uploads/%';
 		$like_wpimage  = '%wp-image-%';
 
-		$last_id = 0;
+		$meta_complete = false;
+		$last_id       = 0;
 		while ( ( microtime( true ) - $start ) < $budget ) {
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
@@ -972,6 +1048,7 @@ class SS_Orphan_Media_Scanner {
 			); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 			if ( empty( $rows ) ) {
+				$meta_complete = true;
 				break;
 			}
 
@@ -985,13 +1062,14 @@ class SS_Orphan_Media_Scanner {
 					self::mark( $id, 'possibly_used', 'meta:possible-builder-reference' );
 				}
 			}
-
-			if ( ( microtime( true ) - $start ) >= $budget ) {
-				return;
-			}
 		}
 
-		$last_id = 0;
+		if ( ! $meta_complete ) {
+			return false;
+		}
+
+		$options_complete = false;
+		$last_id          = 0;
 		while ( ( microtime( true ) - $start ) < $budget ) {
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
@@ -1005,6 +1083,7 @@ class SS_Orphan_Media_Scanner {
 			); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 			if ( empty( $rows ) ) {
+				$options_complete = true;
 				break;
 			}
 
@@ -1016,6 +1095,8 @@ class SS_Orphan_Media_Scanner {
 				}
 			}
 		}
+
+		return $options_complete;
 	}
 
 	private static function build_results() {

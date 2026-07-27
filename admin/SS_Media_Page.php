@@ -442,6 +442,11 @@ class SS_Media_Page {
 					);
 					?>
 				</p>
+				<?php if ( get_option( SS_Orphan_Media_Scanner::INCOMPLETE_OPTION ) ) : ?>
+					<p class="ss-muted ss-scan-incomplete-note">
+						<?php esc_html_e( 'The last scan didn\'t have time to check every post/page before its time budget ran out — on a large site that can take more than one pass. Files this scanner already confirmed "Used" stay protected in the meantime. Click "Scan Now" again to keep checking the rest of your content.', 'storage-sherpa' ); ?>
+					</p>
+				<?php endif; ?>
 			<?php endif; ?>
 
 			<div class="ss-toolbar">

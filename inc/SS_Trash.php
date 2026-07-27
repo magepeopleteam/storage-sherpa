@@ -364,11 +364,18 @@ class SS_Trash {
 	}
 
 	/**
-	 * Shared WHERE-clause builder for query()/count_matching() — `search`
-	 * matches against either `label` (the item name every trash entry has)
-	 * or `original_path` (only ever set for item_type = 'file'; NULL for
-	 * db_row/table_dump entries, which a search term simply won't match
-	 * there, same as any other LIKE against a NULL column).
+	 * Shared WHERE-clause builder for query()/count_matching()/ids() —
+	 * `search` matches against either `label` (the item name every trash
+	 * entry has) or `original_path` (only ever set for item_type = 'file';
+	 * NULL for db_row/table_dump entries, which a search term simply won't
+	 * match there, same as any other LIKE against a NULL column).
+	 *
+	 * `file_type` (an SS_Filetype_Analyzer category — images/videos/pdfs/
+	 * zip/etc., plus "unknown") matches by extension against `original_path`
+	 * the same way SS_Media_Findings::build_where() matches `file_path` —
+	 * only `item_type = 'file'` rows have a real on-disk extension to match,
+	 * so this filter naturally (and correctly) excludes db_row/table_dump
+	 * entries once a specific type is chosen.
 	 */
 	private static function build_where( $args ) {
 		global $wpdb;
@@ -388,6 +395,28 @@ class SS_Trash {
 			$params[] = $like;
 		}
 
+		if ( ! empty( $args['file_type'] ) && class_exists( 'SS_Filetype_Analyzer' ) ) {
+			$categories = SS_Filetype_Analyzer::categories();
+
+			if ( 'unknown' === $args['file_type'] ) {
+				$clauses = array();
+				foreach ( SS_Filetype_Analyzer::all_extensions() as $ext ) {
+					$clauses[] = 'original_path NOT LIKE %s';
+					$params[]  = '%.' . $wpdb->esc_like( $ext );
+				}
+				if ( $clauses ) {
+					$where[] = 'original_path IS NOT NULL AND (' . implode( ' AND ', $clauses ) . ')';
+				}
+			} elseif ( isset( $categories[ $args['file_type'] ] ) ) {
+				$clauses = array();
+				foreach ( $categories[ $args['file_type'] ] as $ext ) {
+					$clauses[] = 'original_path LIKE %s';
+					$params[]  = '%.' . $wpdb->esc_like( $ext );
+				}
+				$where[] = '(' . implode( ' OR ', $clauses ) . ')';
+			}
+		}
+
 		return array( $where, $params );
 	}
 
@@ -395,12 +424,13 @@ class SS_Trash {
 		global $wpdb;
 
 		$defaults = array(
-			'restored' => 0,
-			'module'   => '',
-			'search'   => '',
-			'orderby'  => 'deleted_at DESC',
-			'limit'    => 50,
-			'offset'   => 0,
+			'restored'  => 0,
+			'module'    => '',
+			'search'    => '',
+			'file_type' => '',
+			'orderby'   => 'deleted_at DESC',
+			'limit'     => 50,
+			'offset'    => 0,
 		);
 		$args = wp_parse_args( $args, $defaults );
 
@@ -417,16 +447,18 @@ class SS_Trash {
 	}
 
 	/**
-	 * Total rows matching restored/module/search — backs the Recovery
-	 * Center screen's pagination once a search term narrows the result set.
+	 * Total rows matching restored/module/search/file_type — backs the
+	 * Recovery Center screen's pagination once a search term or file-type
+	 * filter narrows the result set.
 	 */
 	public static function count_matching( $args = array() ) {
 		global $wpdb;
 
 		$defaults = array(
-			'restored' => 0,
-			'module'   => '',
-			'search'   => '',
+			'restored'  => 0,
+			'module'    => '',
+			'search'    => '',
+			'file_type' => '',
 		);
 		$args = wp_parse_args( $args, $defaults );
 
@@ -438,10 +470,10 @@ class SS_Trash {
 	}
 
 	/**
-	 * Every trash id matching restored/module/search, unpaginated — backs
-	 * the Recovery Center screen's "select all N items matching this
-	 * filter" bulk action, same reasoning as SS_Media_Findings::ids(): the
-	 * browser walks this list in small chunks against restore-bulk/
+	 * Every trash id matching restored/module/search/file_type, unpaginated
+	 * — backs the Recovery Center screen's "select all N items matching
+	 * this filter" bulk action, same reasoning as SS_Media_Findings::ids():
+	 * the browser walks this list in small chunks against restore-bulk/
 	 * delete-bulk rather than the server processing everything in one
 	 * request. Capped the same as SS_Media_Findings::ids().
 	 */
@@ -449,9 +481,10 @@ class SS_Trash {
 		global $wpdb;
 
 		$defaults = array(
-			'restored' => 0,
-			'module'   => '',
-			'search'   => '',
+			'restored'  => 0,
+			'module'    => '',
+			'search'    => '',
+			'file_type' => '',
 		);
 		$args = wp_parse_args( $args, $defaults );
 
